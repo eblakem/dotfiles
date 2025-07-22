@@ -1,0 +1,3 @@
+browser "qutebrowser %u"
+
+macro i set pager "./kitty-img-pager"; open; set pager internal

@@ -1,0 +1,29 @@
+# my_env_vars_role/tasks/main.yml
+---
+- name: Check if environment variables already exist
+  command: grep -Fq "export {{ item }}=" ~/.profile
+  register: grep_results
+  ignore_errors: true
+  loop: "{{ env_vars }}"
+
+- name: Set fact for existing environment variables
+  set_fact:
+    existing_vars: "{{ existing_vars | default([]) + [item.item] }}"
+  when: item.rc == 1  # If grep found the variable
+  loop: "{{ grep_results.results }}"
+
+- name: Prompt for environment variable values if not already present
+  pause:
+    prompt: "Please enter the value for {{ item }}:"
+  register: user_input 
+  when: existing_vars is defined
+  loop: "{{ existing_vars }}"
+
+- name: Write environment variables to .profile if not already present
+  lineinfile:
+    path: ~/.profile
+    line: "export {{ item.item }}={{ item.user_input }}"
+    state: present
+  when: user_input is defined and user_input.results is defined 
+  loop: "{{ user_input.results }}"
+

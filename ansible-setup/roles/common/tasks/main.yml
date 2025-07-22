@@ -1,0 +1,27 @@
+---
+- name: Update the system
+  become: yes
+  pacman:
+    update_cache: yes
+    upgrade: yes
+  changed_when: false
+
+- name: Set timezone to Australia/Brisbane
+  become: yes
+  timezone:
+    name: Australia/Brisbane
+
+- name: Install essential packages
+  become: yes
+  pacman:
+    name:
+      - base-devel
+      - git 
+      - openssh
+    state: present
+
+- name: Create .profile file
+  file:
+    path: ~/.profile
+    state: touch 
+

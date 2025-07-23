@@ -256,7 +256,8 @@ spawn-at-startup "waybar"
 spawn-at-startup "swayidle" "-w" "timeout" "601" "niri msg action power-off-monitors" "timeout" "600" "swaylock -f" "before-sleep" "swaylock -f"
 spawn-at-startup "xwayland-satellite"
 spawn-at-startup "~/.config/niri/scripts/set-wallpaper.sh"
-spawn-at-startup "plasma-polkit-agent"
+spawn-at-startup "polkit-kde-agent"
+spawn-at-startup "udiskie"
 
 // Uncomment this line to ask the clients to omit their client-side decorations if possible.
 // If the client will specifically ask for CSD, the request will be honored.
@@ -572,7 +573,7 @@ binds {
     Mod+Escape allow-inhibiting=false { toggle-keyboard-shortcuts-inhibit; }
 
     // The quit action will show a confirmation dialog to avoid accidental exits.
-    Mod+Shift+E { quit; }
+    Mod+Shift+E { spawn "nwg-bar"; }
     Ctrl+Alt+Delete { quit; }
 
     // Powers off the monitors. To turn them back on, do any input like

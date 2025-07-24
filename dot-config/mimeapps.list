@@ -1,0 +1,18 @@
+
+[Default Applications]
+image/bmp;image/jpeg=sxiv.desktop
+image/bmp;image/png=sxiv.desktop
+application/pdf=org.pwmt.zathura.desktop
+image/bmp;image/gif;image/jpeg;image/jpg;image/png;image/tiff;image/x-bmp;image/x-portable-anymap;image/x-portable-bitmap;image/x-portable-graymap;image/x-tga;image/x-xpixmap;=sxiv.desktop
+image/png=sxiv.desktop
+image/bmp=sxiv.desktop
+image/gif=sxiv.desktop
+image/jpeg=sxiv.desktop
+image/jpg=sxiv.desktop
+image/tiff=sxiv.desktop
+image/x-bmp=sxiv.desktop
+image/x-portable-anymap=sxiv.desktop
+image/x-portable-bitmap=sxiv.desktop
+image/x-portable-graymap=sxiv.desktop
+image/x-tga=sxiv.desktop
+image/x-xpixmap=sxiv.desktop

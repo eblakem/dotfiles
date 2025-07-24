@@ -258,6 +258,7 @@ spawn-at-startup "xwayland-satellite"
 spawn-at-startup "~/.config/niri/scripts/set-wallpaper.sh"
 spawn-at-startup "polkit-kde-agent"
 spawn-at-startup "udiskie"
+spawn-at-startup "wlsunset"
 
 // Uncomment this line to ask the clients to omit their client-side decorations if possible.
 // If the client will specifically ask for CSD, the request will be honored.
@@ -585,7 +586,6 @@ binds {
 }
 environment {
     XCURSOR_SIZE "24"
-    HYPRCURSOR_SIZE "24"
     XDG_BACKEND "wayland"
     XDG_CURRENT_DESKTOP "Niri"
     XDG_SESSION_TYPE "wayland"
@@ -605,4 +605,5 @@ environment {
     LANG "en_AU.UTF-8"
     ELECTRON_OZONE_PLATFORM_HINT "wayland"
     DISPLAY ":0"
+    SYSTEMD_SLEEP_FREEZE_USER_SESSIONS "false"
 }

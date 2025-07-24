@@ -21,12 +21,6 @@ window#waybar {
   background: #000000;
 }
 
-.modules-center {
-  margin-top: 2px;
-  padding-left: 3px;
-  border-radius: 15px 15px 15px 15px;
-  background: #000000;
-}
 
 .modules-left {
   border-radius: 0 15px 15px 0;

@@ -33,3 +33,12 @@ settings:
   content.register_protocol_handler:
     https://mail.google.com?extsrc=mailto&url=%25s: true
     https://outlook.office.com?mailtouri=%25s: true
+  editor.command:
+    global:
+    - nvim
+    - -f
+    - '{file}'
+    - -c
+    - normal {line}G{column0}l
+  fonts.default_size:
+    global: 12pt

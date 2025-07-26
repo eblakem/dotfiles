@@ -258,7 +258,7 @@ spawn-at-startup "xwayland-satellite"
 spawn-at-startup "~/.config/niri/scripts/set-wallpaper.sh"
 spawn-at-startup "polkit-kde-agent"
 spawn-at-startup "udiskie"
-spawn-at-startup "wlsunset -l -27.4333316 -L 153.0333332"
+spawn-at-startup "~/.config/niri/scripts/set-wlsunset.sh"
 
 // Uncomment this line to ask the clients to omit their client-side decorations if possible.
 // If the client will specifically ask for CSD, the request will be honored.

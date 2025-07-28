@@ -7,7 +7,11 @@
 config_version: 2
 settings:
   colors.webpage.darkmode.enabled:
-    global: true
+    global: false
+  colors.webpage.darkmode.policy.page:
+    global: smart
+  colors.webpage.preferred_color_scheme:
+    global: dark
   content.desktop_capture:
     https://teams.microsoft.com: true
   content.geolocation:

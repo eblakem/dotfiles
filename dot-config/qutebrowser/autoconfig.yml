@@ -33,6 +33,7 @@ settings:
   content.mouse_lock:
     https://api2.enscape3d.com: true
   content.notifications.enabled:
+    https://app.element.io: true
     https://myhr.health.qld.gov.au: true
     https://teams.microsoft.com: true
     https://www.faceit.com: true

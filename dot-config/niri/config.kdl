@@ -259,6 +259,9 @@ spawn-at-startup "~/.config/niri/scripts/set-wallpaper.sh"
 spawn-at-startup "polkit-kde-agent"
 spawn-at-startup "udiskie"
 spawn-at-startup "~/.config/niri/scripts/set-wlsunset.sh"
+spawn-at-startup "wl-paste --type text --watch cliphist store" // Stores only text data
+spawn-at-startup "wl-paste --type image --watch cliphist store"
+
 
 // Uncomment this line to ask the clients to omit their client-side decorations if possible.
 // If the client will specifically ask for CSD, the request will be honored.

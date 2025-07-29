@@ -1,0 +1,13 @@
+autologin.blob="vdxG0Z3eikxN2LgiX1WStzEDtLiQjs13x3PUOUyvmsojjQTSc+R3xSsZCQAkUJe/RNCJPzQ4KjBfZgcQpJtyg0rQiaw3gktXRKy2hWYCxgsX9gdu+p12lpJrDDQ92cG6umOPfvqn2COdn0Gu6ccJ+sopjYYlJZ24KR6+MQQHlyRG9eO1LjZM4wNj4OSqArHIADfZBEwxsvcKJwJKR1aX402iXNhiuC62jkfi6ft3xrt2Ll4RcY1qy5eA1pzkQEy+"
+autologin.canonical_username="eblakem"
+autologin.saved_credentials="{\"eblakem\":[\"eblakem\",\"vdxG0Z3eikxN2LgiX1WStzEDtLiQjs13x3PUOUyvmsojjQTSc+R3xSsZCQAkUJe/RNCJPzQ4KjBfZgcQpJtyg0rQiaw3gktXRKy2hWYCxgsX9gdu+p12lpJrDDQ92cG6umOPfvqn2COdn0Gu6ccJ+sopjYYlJZ24KR6+MQQHlyRG9eO1LjZM4wNj4OSqArHIADfZBEwxsvcKJwJKR1aX402iXNhiuC62jkfi6ft3xrt2Ll4RcY1qy5eA1pzkQEy+\"]}"
+app.window.state.saved=true
+app.window.position.width=800
+app.rollback-to-sc=true
+es.send-on-startup=true
+core.clock_delta=0
+autologin.username="eblakem"
+app.window.position.saved=true
+app.window.position.height=1146
+storage.last-location="/home/michael/.cache/spotify/Storage"
+app.last-launched-version="1.2.63.394.g126b0d89"

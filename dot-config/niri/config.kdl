@@ -380,6 +380,8 @@ binds {
     XF86MonBrightnessUp allow-when-locked=true { spawn "brightnessctl" "set" "10%+"; }
     XF86MonBrightnessDown allow-when-locked=true { spawn "brightnessctl" "set" "10%-"; }
 
+    //Mod+P { spawn "cliphist list | fuzzel | cliphist decode | wl-copy"; }
+
     Mod+Q { close-window; }
 
     Mod+Left  { focus-column-left; }

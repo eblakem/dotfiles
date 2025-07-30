@@ -47,5 +47,9 @@ settings:
     - '{file}'
     - -c
     - normal {line}G{column0}l
+  fonts.default_family:
+    global: default_family
   fonts.default_size:
-    global: 12pt
+    global: 10pt
+  fonts.downloads:
+    global: default_size default_family

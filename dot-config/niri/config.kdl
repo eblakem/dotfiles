@@ -577,10 +577,13 @@ binds {
     // since it will switch twice upon pressing the hotkey (once by xkb, once by niri).
     // Mod+Space       { switch-layout "next"; }
     // Mod+Shift+Space { switch-layout "prev"; }
+    
+    // bind = ,Print, exec, grim - | swappy -f -
+    // bind = SHIFT, Print, exec, grim -g "$(slurp -w 0)" - | swappy -f - 
 
-    Print { screenshot; }
-    Ctrl+Print { screenshot-screen; }
-    Alt+Print { screenshot-window; }
+    Print { spawn "~/.config/niri/scripts/screenshot.sh"; }
+    Ctrl+Print { spawn "~/.config/niri/scripts/screenshot-screen.sh"; }
+    Alt+Print { spawn "~/.config/niri/scripts/screenshot-window.sh"; }
 
     // Applications such as remote-desktop clients and software KVM switches may
     // request that niri stops processing the keyboard shortcuts defined here

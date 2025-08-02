@@ -1,6 +1,10 @@
 *.scm
+dconf/
+assets
 Bitwarden/
 pulse/
 chromium/
 libreoffice/
 photoflare/
+qBittorrent/
+go/

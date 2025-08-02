@@ -362,6 +362,7 @@ binds {
     Mod+D { spawn "fuzzel"; }
     
     Mod+W { spawn "qutebrowser"; }
+    Mod+E { spawn "kitty" "-e" "nnn"; }
 
     Super+Alt+L { spawn "swaylock"; }
     Mod+O repeat=false { toggle-overview; }

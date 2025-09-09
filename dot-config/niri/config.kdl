@@ -365,6 +365,10 @@ binds {
     Mod+E { spawn "kitty" "-e" "nnn"; }
 
     Super+Alt+L { spawn "swaylock"; }
+
+    Super+Alt+W { spawn "kitty" "-e" "impala"; }
+    Super+Alt+B { spawn "kitty" "-e" "bluetui"; }
+
     Mod+O repeat=false { toggle-overview; }
 
     // You can also use a shell. Do this if you need pipes, multiple commands, etc.

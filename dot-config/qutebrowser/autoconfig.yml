@@ -21,6 +21,7 @@ settings:
     https://duckduckgo.com: access-paste
     https://github.com: access-paste
     https://healthqld.sharepoint.com: access-paste
+    https://mise.jdx.dev: access-paste
     https://outlook.office.com: access-paste
     https://teams.microsoft.com: access-paste
     https://wiki.hyprland.org: access-paste

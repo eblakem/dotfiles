@@ -24,6 +24,7 @@ settings:
     https://mise.jdx.dev: access-paste
     https://outlook.office.com: access-paste
     https://teams.microsoft.com: access-paste
+    https://us-east-1.console.aws.amazon.com: access-paste
     https://wiki.hyprland.org: access-paste
   content.media.audio_capture:
     https://teams.microsoft.com: true

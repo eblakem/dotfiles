@@ -1,0 +1,10 @@
+2026-02-13 14:18:03.750 [info] Getting extensions control
+2026-02-13 14:18:03.800 [info] Started initializing default profile extensions in extensions installation folder. file:///home/michael/.cursor/extensions
+2026-02-13 14:18:03.919 [warning] Failed to create default profile extensions manifest in extensions installation folder. file:///home/michael/.cursor/extensions Unable to create file 'vscode-userdata:/home/michael/.cursor/extensions/extensions.json' that already exists when overwrite flag is not set
+2026-02-13 14:18:03.919 [info] Completed initializing default profile extensions in extensions installation folder. file:///home/michael/.cursor/extensions
+2026-02-13 14:20:24.104 [info] Getting Manifest... vscodevim.vim
+2026-02-13 14:20:25.020 [info] Installing extension: vscodevim.vim {"context":{"skipPublisherTrust":true},"isMachineScoped":false,"profileLocation":{"$mid":1,"external":"vscode-userdata:/home/michael/.cursor/extensions/extensions.json","path":"/home/michael/.cursor/extensions/extensions.json","scheme":"vscode-userdata"},"installOnlyNewlyAddedFromExtensionPack":true,"isApplicationScoped":false,"productVersion":{"version":"2.4.36","date":"2026-02-12T21:00:33.976Z","vscodeVersion":"1.105.1"}}
+2026-02-13 14:20:25.066 [info] Started downloading extension: vscodevim.vim 1.32.4 file:///home/michael/.config/Cursor/CachedExtensionVSIXs/vscodevim.vim-1.32.4-universal
+2026-02-13 14:20:25.974 [info] Extracted extension to file:///home/michael/.cursor/extensions/vscodevim.vim-1.32.4-universal: vscodevim.vim
+2026-02-13 14:20:26.151 [info] Renamed to /home/michael/.cursor/extensions/vscodevim.vim-1.32.4-universal
+2026-02-13 14:20:26.180 [info] Extension installed successfully: vscodevim.vim vscode-userdata:/home/michael/.cursor/extensions/extensions.json

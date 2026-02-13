@@ -1,0 +1,82 @@
+{
+    "telemetry.sqmId": "",
+    "telemetry.macMachineId": "afc8be02ca0454866f40c0ac1dfa57afb4a9b62b6406ed1a46694b2a3a6b464a",
+    "telemetry.machineId": "b1e0b1e7bd36ba0250027acb353e359b8326b59d78c12c11268dd957778d57b5",
+    "telemetry.devDeviceId": "40930447-e634-46e8-9c79-b9d0f0a91ae9",
+    "backupWorkspaces": {
+        "workspaces": [],
+        "folders": [
+            {
+                "folderUri": "file:///home/michael/apps/phoenix"
+            }
+        ],
+        "emptyWindows": [
+            {
+                "backupFolder": "1770956278695"
+            }
+        ]
+    },
+    "windowControlHeight": 35,
+    "profileAssociations": {
+        "workspaces": {
+            "file:///home/michael/apps/phoenix": "__default__profile__"
+        },
+        "emptyWindows": {
+            "1770956278695": "__default__profile__"
+        }
+    },
+    "theme": "vs-dark",
+    "themeBackground": "#181818",
+    "windowSplash": {
+        "zoomLevel": 0,
+        "baseTheme": "vs-dark",
+        "colorInfo": {
+            "foreground": "rgba(228, 228, 228, 0.92)",
+            "background": "#181818",
+            "editorBackground": "#181818",
+            "titleBarBackground": "#141414",
+            "titleBarBorder": "rgba(228, 228, 228, 0.07)",
+            "activityBarBackground": "#141414",
+            "sideBarBackground": "#141414",
+            "sideBarBorder": "rgba(228, 228, 228, 0.07)",
+            "statusBarBackground": "#141414",
+            "statusBarBorder": "rgba(228, 228, 228, 0.07)",
+            "statusBarNoFolderBackground": "#141414"
+        },
+        "layoutInfo": {
+            "sideBarSide": "left",
+            "editorPartMinWidth": 220,
+            "titleBarHeight": 35,
+            "activityBarWidth": 0,
+            "sideBarWidth": 300,
+            "auxiliarySideBarWidth": 420,
+            "statusBarHeight": 22,
+            "windowBorder": false,
+            "unifiedSideBarWidth": 214
+        }
+    },
+    "windowsState": {
+        "lastActiveWindow": {
+            "folder": "file:///home/michael/apps/phoenix",
+            "backupPath": "/home/michael/.config/Cursor/Backups/537e22175abae784309dd225d4dcd27b",
+            "uiState": {
+                "mode": 1,
+                "x": 0,
+                "y": 0,
+                "width": 1896,
+                "height": 1146
+            }
+        },
+        "openedWindows": []
+    },
+    "windowSplashWorkspaceOverride": {
+        "layoutInfo": {
+            "auxiliarySideBarWidth": [
+                420,
+                [
+                    "bb120bea10bc31d853c45f3b574a5a33"
+                ]
+            ]
+        }
+    }
+}

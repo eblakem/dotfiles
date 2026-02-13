@@ -1,0 +1,24 @@
+{
+  "add books dialog dir": "/home/michael/Downloads/J.K. Rowling/2 - Harry Potter and the Chamber of Secrets",
+  "add books dialog dir-last-used-filter-spec-all-files": false,
+  "database location dialog": "/home/michael/Calibre Library",
+  "notified-version-updates": {
+    "__class__": "set",
+    "__value__": [
+      "8.16"
+    ]
+  },
+  "recursive book import root dir dialog": "/home/michael/Downloads/J.K. Rowling",
+  "sort_history": [
+    [
+      "timestamp",
+      false
+    ],
+    [
+      "timestamp",
+      false
+    ]
+  ],
+  "welcome_wizard_device": "kindle",
+  "welcome_wizard_was_run": true
+}

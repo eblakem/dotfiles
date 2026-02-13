@@ -1,0 +1,14 @@
+{
+    "comments_fields": [
+        "comments"
+    ],
+    "height": "auto",
+    "lines": [
+        "<b>{title}</b> by {authors}",
+        "{series_index} of <i>{series}</i>|||{rating}",
+        "{tags}",
+        "Date: {timestamp}|||Published: {pubdate}|||Publisher: {publisher}"
+    ],
+    "thumbnail": true,
+    "thumbnail_height": 140
+}

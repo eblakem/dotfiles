@@ -1,0 +1,11 @@
+2026-02-13 14:17:58.125 [info] updateURL https://api2.cursor.sh/updates/api/update/linux-x64/cursor/2.4.36/b1e0b1e7bd36ba0250027acb353e359b8326b59d78c12c11268dd957778d57b5/stable
+2026-02-13 14:17:58.126 [info] update#setState idle
+2026-02-13 14:18:11.831 [info] [CursorProclistService] Config enabled feature (subsample every 10s)
+2026-02-13 14:18:28.128 [info] update#setState checking for updates
+2026-02-13 14:18:28.384 [info] update#setState idle
+2026-02-13 14:20:59.365 [info] Extension host with pid 20620 exited with code: 0, signal: unknown.
+2026-02-13 14:21:05.656 [info] [CursorProclistService] Config enabled feature (subsample every 10s)
+2026-02-13 14:23:29.220 [info] Extension host with pid 22281 exited with code: 0, signal: unknown.
+2026-02-13 14:23:29.222 [info] Extension host with pid 22280 exited with code: 0, signal: unknown.
+2026-02-13 14:23:29.225 [info] Extension host with pid 22279 exited with code: 0, signal: unknown.
+2026-02-13 14:23:29.270 [info] Extension host with pid 22259 exited with code: 0, signal: unknown.

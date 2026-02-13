@@ -15,6 +15,7 @@ settings:
   content.desktop_capture:
     https://teams.microsoft.com: true
   content.geolocation:
+    https://www.bom.gov.au: true
     https://www.google.com.au: true
     https://zoom.earth: true
   content.javascript.clipboard:

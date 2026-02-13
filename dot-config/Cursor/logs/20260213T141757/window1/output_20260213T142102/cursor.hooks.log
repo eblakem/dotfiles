@@ -1,0 +1,14 @@
+[2026-02-13T04:21:03.338Z] Initializing Cursor Hooks Service...
+[2026-02-13T04:21:03.338Z] Claude user config path: /home/michael/.claude/settings.json
+[2026-02-13T04:21:03.338Z] Project config path: /home/michael/apps/phoenix/.cursor/hooks.json
+[2026-02-13T04:21:03.338Z] Claude project config path: /home/michael/apps/phoenix/.claude/settings.json
+[2026-02-13T04:21:03.338Z] Claude project local config path: /home/michael/apps/phoenix/.claude/settings.local.json
+[2026-02-13T04:21:03.338Z] User config path: /home/michael/.cursor/hooks.json
+[2026-02-13T04:21:03.338Z] Enterprise config path: file:///etc/cursor/hooks.json
+[2026-02-13T04:21:03.339Z] Reloading hooks configuration...
+[2026-02-13T04:21:03.342Z] No Claude user settings found
+[2026-02-13T04:21:03.349Z] No enterprise hooks configuration found
+[2026-02-13T04:21:03.353Z] No user hooks configuration found
+[2026-02-13T04:21:03.361Z] No project hooks configuration found
+[2026-02-13T04:21:03.361Z] Refreshing team hooks...
+[2026-02-13T04:21:03.362Z] Cursor Hooks Service initialized successfully

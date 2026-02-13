@@ -1,0 +1,6 @@
+2025-10-02 13:46:39.722 [info] Getting Manifest... foam.foam-vscode
+2025-10-02 13:46:42.254 [info] Installing extension: foam.foam-vscode {"isMachineScoped":false,"installPreReleaseVersion":false,"pinned":false,"profileLocation":{"$mid":1,"external":"vscode-userdata:/home/michael/.vscode-oss/extensions/extensions.json","path":"/home/michael/.vscode-oss/extensions/extensions.json","scheme":"vscode-userdata"},"isApplicationScoped":false,"productVersion":{"version":"1.104.2","date":"2025-09-26T19:07:51.304Z"}}
+2025-10-02 13:46:49.601 [info] Extension signature verification result for foam.foam-vscode: Success. Executed: true. Duration: 1774ms.
+2025-10-02 13:46:49.660 [info] Extracted extension to file:///home/michael/.vscode-oss/extensions/foam.foam-vscode-0.28.2-universal: foam.foam-vscode
+2025-10-02 13:46:49.701 [info] Renamed to /home/michael/.vscode-oss/extensions/foam.foam-vscode-0.28.2-universal
+2025-10-02 13:46:49.758 [info] Extension installed successfully: foam.foam-vscode vscode-userdata:/home/michael/.vscode-oss/extensions/extensions.json

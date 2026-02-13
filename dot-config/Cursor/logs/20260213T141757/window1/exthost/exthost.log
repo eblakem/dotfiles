@@ -1,0 +1,263 @@
+2026-02-13 14:18:05.171 [info] Extension host with pid 20620 started
+2026-02-13 14:18:05.171 [info] [ExtHostShellExec] Detecting sandbox support...
+2026-02-13 14:18:05.171 [info] [ExtHostShellExec] Platform: linux, Shell type: unknown
+2026-02-13 14:18:05.171 [info] [ExtHostShellExec] dirname: /usr/share/cursor/resources/app/out/vs/workbench/api/node
+2026-02-13 14:18:05.171 [info] [ExtHostShellExec] Sandbox helper path: /usr/share/cursor/resources/app/resources/helpers/cursorsandbox
+2026-02-13 14:18:05.171 [info] [ExtHostShellExec] process.resourcesPath: /usr/lib/electron39/resources
+2026-02-13 14:18:05.171 [info] [ExtHostShellExec] process.execPath: /usr/lib/electron39/electron
+2026-02-13 14:18:05.171 [info] [ExtHostShellExec] ripgrep path for sandboxing: /usr/share/cursor/resources/app/node_modules/@vscode/ripgrep/bin/rg
+2026-02-13 14:18:05.171 [info] [shell-exec:sandbox] [isSandboxHelperSupported] Starting sandbox support check...
+2026-02-13 14:18:05.171 [info] [shell-exec:sandbox] [checkBinaryAvailable] Resolved binary path: /usr/share/cursor/resources/app/resources/helpers/cursorsandbox
+2026-02-13 14:18:05.171 [info] [shell-exec:sandbox] [checkBinaryAvailable] Binary path exists: true
+2026-02-13 14:18:05.171 [info] [shell-exec:sandbox] [isSandboxHelperSupported] Running preflight with binary: /usr/share/cursor/resources/app/resources/helpers/cursorsandbox
+2026-02-13 14:18:05.171 [info] [shell-exec:sandbox] [isSandboxHelperSupported] CWD: /home/michael
+2026-02-13 14:18:05.171 [info] [shell-exec:sandbox] [isSandboxHelperSupported] Preflight succeeded, sandbox supported!
+2026-02-13 14:18:05.171 [info] [ExtHostShellExec] Sandbox support detected: true
+2026-02-13 14:18:05.171 [info] [ExtHostShellExec] Initializing terminal executor with userTerminalHint: /usr/bin/fish
+2026-02-13 14:18:05.233 [info] ExtensionService#_doActivateExtension vscode.emmet, startup: false, activationEvent: 'onLanguage'
+2026-02-13 14:18:05.286 [info] Extension activated success: vscode.emmet — 49ms (code loading: 33ms, activate call: 16ms, activate resolved: 0ms)
+2026-02-13 14:18:05.296 [info] ExtensionService#_doActivateExtension anysphere.cursor-agent, startup: true, activationEvent: '*'
+2026-02-13 14:18:05.599 [info] ExtensionService#_doActivateExtension vscode.git-base, startup: true, activationEvent: '*', root cause: anysphere.cursor-agent-exec
+2026-02-13 14:18:05.603 [info] ExtensionService#_doActivateExtension anysphere.cursor-polyfills-remote, startup: true, activationEvent: '*'
+2026-02-13 14:18:05.639 [info] Extension activated success: anysphere.cursor-agent — 308ms (code loading: 302ms, activate call: 1ms, activate resolved: 5ms)
+2026-02-13 14:18:05.641 [info] Extension activated success: vscode.git-base — 4ms (code loading: 3ms, activate call: 1ms, activate resolved: 0ms)
+2026-02-13 14:18:05.642 [info] Extension activated success: anysphere.cursor-polyfills-remote — 30ms (code loading: 30ms, activate call: 0ms, activate resolved: 0ms)
+2026-02-13 14:18:05.669 [info] ExtensionService#_doActivateExtension vscode.git, startup: true, activationEvent: '*', root cause: anysphere.cursor-agent-exec
+2026-02-13 14:18:05.733 [info] ExtensionService#_doActivateExtension vscode.github, startup: true, activationEvent: '*'
+2026-02-13 14:18:05.804 [info] Extension activated success: vscode.github — 33ms (code loading: 27ms, activate call: 2ms, activate resolved: 4ms)
+2026-02-13 14:18:05.852 [info] Extension activated success: vscode.git — 145ms (code loading: 62ms, activate call: 6ms, activate resolved: 77ms)
+2026-02-13 14:18:05.869 [info] ExtensionService#_doActivateExtension anysphere.cursor-retrieval, startup: true, activationEvent: '*', root cause: anysphere.cursor-agent-exec
+2026-02-13 14:18:06.188 [info] Extension activated success: anysphere.cursor-retrieval — 317ms (code loading: 305ms, activate call: 2ms, activate resolved: 10ms)
+2026-02-13 14:18:06.193 [info] ExtensionService#_doActivateExtension anysphere.cursor-agent-exec, startup: true, activationEvent: '*'
+2026-02-13 14:18:06.723 [info] ExtensionService#_doActivateExtension anysphere.cursor-mcp, startup: false, activationEvent: 'api', root cause: anysphere.cursor-agent-exec
+2026-02-13 14:18:07.195 [info] Extension activated success: anysphere.cursor-mcp — 438ms (code loading: 436ms, activate call: 2ms, activate resolved: 0ms)
+2026-02-13 14:18:07.210 [info] Extension activated success: anysphere.cursor-agent-exec — 1016ms (code loading: 398ms, activate call: 4ms, activate resolved: 614ms)
+2026-02-13 14:18:07.211 [info] Eager extensions activated
+2026-02-13 14:18:07.234 [info] ExtensionService#_doActivateExtension anysphere.cursor-always-local, startup: false, activationEvent: 'onStartupFinished'
+2026-02-13 14:18:07.634 [info] ExtensionService#_doActivateExtension anysphere.cursor-android-emulator-connect, startup: false, activationEvent: 'onStartupFinished'
+2026-02-13 14:18:07.648 [info] ExtensionService#_doActivateExtension cursor.cursor-browser-automation, startup: false, activationEvent: 'onStartupFinished'
+2026-02-13 14:18:07.660 [info] ExtensionService#_doActivateExtension anysphere.cursor-deeplink, startup: false, activationEvent: 'onStartupFinished'
+2026-02-13 14:18:07.746 [info] ExtensionService#_doActivateExtension anysphere.cursor-ios-simulator-connect, startup: false, activationEvent: 'onStartupFinished'
+2026-02-13 14:18:07.922 [info] ExtensionService#_doActivateExtension anysphere.cursor-shadow-workspace, startup: false, activationEvent: 'onStartupFinished'
+2026-02-13 14:18:08.031 [info] ExtensionService#_doActivateExtension vscode.debug-auto-launch, startup: false, activationEvent: 'onStartupFinished'
+2026-02-13 14:18:08.033 [info] ExtensionService#_doActivateExtension vscode.merge-conflict, startup: false, activationEvent: 'onStartupFinished'
+2026-02-13 14:18:08.063 [info] Extension activated success: anysphere.cursor-always-local — 406ms (code loading: 400ms, activate call: 6ms, activate resolved: 0ms)
+2026-02-13 14:18:08.065 [info] Extension activated success: anysphere.cursor-android-emulator-connect — 16ms (code loading: 14ms, activate call: 2ms, activate resolved: 0ms)
+2026-02-13 14:18:08.070 [info] Extension activated success: cursor.cursor-browser-automation — 15ms (code loading: 12ms, activate call: 1ms, activate resolved: 2ms)
+2026-02-13 14:18:08.071 [info] Extension activated success: anysphere.cursor-deeplink — 85ms (code loading: 85ms, activate call: 0ms, activate resolved: 0ms)
+2026-02-13 14:18:08.071 [info] Extension activated success: anysphere.cursor-ios-simulator-connect — 174ms (code loading: 174ms, activate call: 0ms, activate resolved: 0ms)
+2026-02-13 14:18:08.073 [info] Extension activated success: anysphere.cursor-shadow-workspace — 110ms (code loading: 109ms, activate call: 1ms, activate resolved: 0ms)
+2026-02-13 14:18:08.074 [info] Extension activated success: vscode.debug-auto-launch — 2ms (code loading: 2ms, activate call: 0ms, activate resolved: 0ms)
+2026-02-13 14:18:08.095 [info] Extension activated success: vscode.merge-conflict — 31ms (code loading: 23ms, activate call: 3ms, activate resolved: 5ms)
+2026-02-13 14:20:26.289 [info] ExtensionService#_doActivateExtension vscodevim.vim, startup: false, activationEvent: 'onStartupFinished'
+2026-02-13 14:20:26.572 [info] Extension activated success: vscodevim.vim — 279ms (code loading: 208ms, activate call: 3ms, activate resolved: 68ms)
+2026-02-13 14:20:27.548 [error] Error: ENOENT: no such file or directory, open '/home/michael/.config/Cursor/User/globalStorage/vscodevim.vim/.registers'
+2026-02-13 14:20:59.320 [info] Extension host terminating: renderer closed the MessagePort
+2026-02-13 14:20:59.363 [error] Error: ENOENT: no such file or directory, open '/home/michael/.config/Cursor/User/globalStorage/vscodevim.vim/.registers'
+2026-02-13 14:20:59.364 [info] Extension host with pid 20620 exiting with code 0
+2026-02-13 14:21:05.486 [info] Extension host with pid 22259 started
+2026-02-13 14:21:05.486 [info] Skipping acquiring lock for /home/michael/.config/Cursor/User/workspaceStorage/bb120bea10bc31d853c45f3b574a5a33.
+2026-02-13 14:21:05.486 [info] [ExtHostShellExec] Detecting sandbox support...
+2026-02-13 14:21:05.486 [info] [ExtHostShellExec] Platform: linux, Shell type: unknown
+2026-02-13 14:21:05.486 [info] [ExtHostShellExec] dirname: /usr/share/cursor/resources/app/out/vs/workbench/api/node
+2026-02-13 14:21:05.486 [info] [ExtHostShellExec] Sandbox helper path: /usr/share/cursor/resources/app/resources/helpers/cursorsandbox
+2026-02-13 14:21:05.486 [info] [ExtHostShellExec] process.resourcesPath: /usr/lib/electron39/resources
+2026-02-13 14:21:05.486 [info] [ExtHostShellExec] process.execPath: /usr/lib/electron39/electron
+2026-02-13 14:21:05.486 [info] [ExtHostShellExec] ripgrep path for sandboxing: /usr/share/cursor/resources/app/node_modules/@vscode/ripgrep/bin/rg
+2026-02-13 14:21:05.487 [info] [shell-exec:sandbox] [isSandboxHelperSupported] Starting sandbox support check...
+2026-02-13 14:21:05.487 [info] [shell-exec:sandbox] [checkBinaryAvailable] Resolved binary path: /usr/share/cursor/resources/app/resources/helpers/cursorsandbox
+2026-02-13 14:21:05.487 [info] [shell-exec:sandbox] [checkBinaryAvailable] Binary path exists: true
+2026-02-13 14:21:05.487 [info] [shell-exec:sandbox] [isSandboxHelperSupported] Running preflight with binary: /usr/share/cursor/resources/app/resources/helpers/cursorsandbox
+2026-02-13 14:21:05.487 [info] [shell-exec:sandbox] [isSandboxHelperSupported] CWD: /home/michael
+2026-02-13 14:21:05.487 [info] [shell-exec:sandbox] [isSandboxHelperSupported] Preflight succeeded, sandbox supported!
+2026-02-13 14:21:05.487 [info] [ExtHostShellExec] Sandbox support detected: true
+2026-02-13 14:21:05.487 [info] [ExtHostShellExec] Initializing terminal executor with userTerminalHint: /usr/bin/fish
+2026-02-13 14:21:05.528 [info] ExtHostSearch [cursorIgnore] internal fileSearch start reason=cursorIgnoreCheck roots=1 include=**/.cursorignore maxResults=0 numThreads=(default) folderQueries=[{"cwd":"/home/michael/apps/phoenix","disregardIgnoreFiles":false,"disregardParentIgnoreFiles":true,"disregardGlobalIgnoreFiles":true,"ignoreSymlinks":false,"rgNoIgnore":false,"rgNoIgnoreParent":true,"rgNoIgnoreGlobal":true,"rgFollow":true}]
+2026-02-13 14:21:05.543 [info] ExtensionService#_doActivateExtension vscode.emmet, startup: false, activationEvent: 'onLanguage'
+2026-02-13 14:21:05.624 [info] ExtHostSearch /usr/share/cursor/resources/app/node_modules/@vscode/ripgrep/bin/rg --files --hidden --case-sensitive --no-require-git -g '**/.cursorignore' -g '!**/.git' -g '!**/.svn' -g '!**/.hg' -g '!**/.DS_Store' -g '!**/Thumbs.db' -g '!**/node_modules' -g '!**/bower_components' -g '!**/*.code-search' --no-ignore-parent --follow --threads '10' --no-config --no-ignore-global
+ - cwd: /home/michael/apps/phoenix
+ - Sibling clauses: {}
+2026-02-13 14:21:05.692 [info] Extension activated success: vscode.emmet — 117ms (code loading: 60ms, activate call: 57ms, activate resolved: 0ms)
+2026-02-13 14:21:05.705 [info] ExtHostSearch Search finished. Stats: {"cmdTime":94,"fileWalkTime":96,"directoriesWalked":0,"filesWalked":0,"cmdResultCount":0}
+2026-02-13 14:21:05.706 [info] ExtHostSearch [cursorIgnore] internal fileSearch done in 179ms limitHit=false failed=false resultCount=0 cmdTime=94 fileWalkTime=96 providerTime=(unknown)
+2026-02-13 14:21:05.718 [info] ExtensionService#_doActivateExtension anysphere.cursor-agent, startup: true, activationEvent: '*'
+2026-02-13 14:21:05.846 [info] Extension host with pid 22281 started
+2026-02-13 14:21:05.846 [info] Skipping acquiring lock for /home/michael/.config/Cursor/User/workspaceStorage/bb120bea10bc31d853c45f3b574a5a33.
+2026-02-13 14:21:05.846 [info] [ExtHostShellExec] Detecting sandbox support...
+2026-02-13 14:21:05.846 [info] [ExtHostShellExec] Platform: linux, Shell type: unknown
+2026-02-13 14:21:05.846 [info] [ExtHostShellExec] dirname: /usr/share/cursor/resources/app/out/vs/workbench/api/node
+2026-02-13 14:21:05.846 [info] [ExtHostShellExec] Sandbox helper path: /usr/share/cursor/resources/app/resources/helpers/cursorsandbox
+2026-02-13 14:21:05.846 [info] [ExtHostShellExec] process.resourcesPath: /usr/lib/electron39/resources
+2026-02-13 14:21:05.846 [info] [ExtHostShellExec] process.execPath: /usr/lib/electron39/electron
+2026-02-13 14:21:05.846 [info] [ExtHostShellExec] ripgrep path for sandboxing: /usr/share/cursor/resources/app/node_modules/@vscode/ripgrep/bin/rg
+2026-02-13 14:21:05.846 [info] [shell-exec:sandbox] [isSandboxHelperSupported] Starting sandbox support check...
+2026-02-13 14:21:05.846 [info] [shell-exec:sandbox] [checkBinaryAvailable] Resolved binary path: /usr/share/cursor/resources/app/resources/helpers/cursorsandbox
+2026-02-13 14:21:05.846 [info] [shell-exec:sandbox] [checkBinaryAvailable] Binary path exists: true
+2026-02-13 14:21:05.846 [info] [shell-exec:sandbox] [isSandboxHelperSupported] Running preflight with binary: /usr/share/cursor/resources/app/resources/helpers/cursorsandbox
+2026-02-13 14:21:05.846 [info] [shell-exec:sandbox] [isSandboxHelperSupported] CWD: /home/michael
+2026-02-13 14:21:05.846 [info] [shell-exec:sandbox] [isSandboxHelperSupported] Preflight succeeded, sandbox supported!
+2026-02-13 14:21:05.846 [info] [ExtHostShellExec] Sandbox support detected: true
+2026-02-13 14:21:05.846 [info] [ExtHostShellExec] Initializing terminal executor with userTerminalHint: /usr/bin/fish
+2026-02-13 14:21:05.875 [info] ExtensionService#_doActivateExtension anysphere.cursor-agent-exec, startup: true, activationEvent: '*'
+2026-02-13 14:21:06.180 [info] Extension host with pid 22280 started
+2026-02-13 14:21:06.180 [info] Skipping acquiring lock for /home/michael/.config/Cursor/User/workspaceStorage/bb120bea10bc31d853c45f3b574a5a33.
+2026-02-13 14:21:06.180 [info] [ExtHostShellExec] Detecting sandbox support...
+2026-02-13 14:21:06.180 [info] [ExtHostShellExec] Platform: linux, Shell type: unknown
+2026-02-13 14:21:06.180 [info] [ExtHostShellExec] dirname: /usr/share/cursor/resources/app/out/vs/workbench/api/node
+2026-02-13 14:21:06.180 [info] [ExtHostShellExec] Sandbox helper path: /usr/share/cursor/resources/app/resources/helpers/cursorsandbox
+2026-02-13 14:21:06.180 [info] [ExtHostShellExec] process.resourcesPath: /usr/lib/electron39/resources
+2026-02-13 14:21:06.180 [info] [ExtHostShellExec] process.execPath: /usr/lib/electron39/electron
+2026-02-13 14:21:06.180 [info] [ExtHostShellExec] ripgrep path for sandboxing: /usr/share/cursor/resources/app/node_modules/@vscode/ripgrep/bin/rg
+2026-02-13 14:21:06.180 [info] [shell-exec:sandbox] [isSandboxHelperSupported] Starting sandbox support check...
+2026-02-13 14:21:06.180 [info] [shell-exec:sandbox] [checkBinaryAvailable] Resolved binary path: /usr/share/cursor/resources/app/resources/helpers/cursorsandbox
+2026-02-13 14:21:06.180 [info] [shell-exec:sandbox] [checkBinaryAvailable] Binary path exists: true
+2026-02-13 14:21:06.180 [info] [shell-exec:sandbox] [isSandboxHelperSupported] Running preflight with binary: /usr/share/cursor/resources/app/resources/helpers/cursorsandbox
+2026-02-13 14:21:06.180 [info] [shell-exec:sandbox] [isSandboxHelperSupported] CWD: /home/michael
+2026-02-13 14:21:06.180 [info] [shell-exec:sandbox] [isSandboxHelperSupported] Preflight succeeded, sandbox supported!
+2026-02-13 14:21:06.180 [info] [ExtHostShellExec] Sandbox support detected: true
+2026-02-13 14:21:06.180 [info] [ExtHostShellExec] Initializing terminal executor with userTerminalHint: /usr/bin/fish
+2026-02-13 14:21:06.194 [info] Eager extensions activated
+2026-02-13 14:21:06.196 [info] ExtensionService#_doActivateExtension anysphere.cursor-always-local, startup: false, activationEvent: 'onStartupFinished'
+2026-02-13 14:21:06.246 [info] Extension host with pid 22279 started
+2026-02-13 14:21:06.246 [info] Skipping acquiring lock for /home/michael/.config/Cursor/User/workspaceStorage/bb120bea10bc31d853c45f3b574a5a33.
+2026-02-13 14:21:06.246 [info] [ExtHostShellExec] Detecting sandbox support...
+2026-02-13 14:21:06.246 [info] [ExtHostShellExec] Platform: linux, Shell type: unknown
+2026-02-13 14:21:06.246 [info] [ExtHostShellExec] dirname: /usr/share/cursor/resources/app/out/vs/workbench/api/node
+2026-02-13 14:21:06.246 [info] [ExtHostShellExec] Sandbox helper path: /usr/share/cursor/resources/app/resources/helpers/cursorsandbox
+2026-02-13 14:21:06.246 [info] [ExtHostShellExec] process.resourcesPath: /usr/lib/electron39/resources
+2026-02-13 14:21:06.246 [info] [ExtHostShellExec] process.execPath: /usr/lib/electron39/electron
+2026-02-13 14:21:06.246 [info] [ExtHostShellExec] ripgrep path for sandboxing: /usr/share/cursor/resources/app/node_modules/@vscode/ripgrep/bin/rg
+2026-02-13 14:21:06.246 [info] [shell-exec:sandbox] [isSandboxHelperSupported] Starting sandbox support check...
+2026-02-13 14:21:06.246 [info] [shell-exec:sandbox] [checkBinaryAvailable] Resolved binary path: /usr/share/cursor/resources/app/resources/helpers/cursorsandbox
+2026-02-13 14:21:06.246 [info] [shell-exec:sandbox] [checkBinaryAvailable] Binary path exists: true
+2026-02-13 14:21:06.246 [info] [shell-exec:sandbox] [isSandboxHelperSupported] Running preflight with binary: /usr/share/cursor/resources/app/resources/helpers/cursorsandbox
+2026-02-13 14:21:06.246 [info] [shell-exec:sandbox] [isSandboxHelperSupported] CWD: /home/michael
+2026-02-13 14:21:06.246 [info] [shell-exec:sandbox] [isSandboxHelperSupported] Preflight succeeded, sandbox supported!
+2026-02-13 14:21:06.246 [info] [ExtHostShellExec] Sandbox support detected: true
+2026-02-13 14:21:06.246 [info] [ExtHostShellExec] Initializing terminal executor with userTerminalHint: /usr/bin/fish
+2026-02-13 14:21:06.258 [info] Eager extensions activated
+2026-02-13 14:21:06.260 [info] ExtensionService#_doActivateExtension vscodevim.vim, startup: false, activationEvent: 'onStartupFinished'
+2026-02-13 14:21:06.263 [info] ExtensionService#_doActivateExtension anysphere.cursor-polyfills-remote, startup: true, activationEvent: '*'
+2026-02-13 14:21:06.290 [info] ExtensionService#_doActivateExtension vscode.git-base, startup: true, activationEvent: '*', root cause: vscode.git
+2026-02-13 14:21:06.310 [info] Extension activated success: anysphere.cursor-agent — 558ms (code loading: 544ms, activate call: 5ms, activate resolved: 9ms)
+2026-02-13 14:21:06.311 [info] Extension activated success: anysphere.cursor-polyfills-remote — 27ms (code loading: 27ms, activate call: 0ms, activate resolved: 0ms)
+2026-02-13 14:21:06.325 [info] Extension activated success: vscode.git-base — 5ms (code loading: 4ms, activate call: 1ms, activate resolved: 0ms)
+2026-02-13 14:21:06.337 [info] ExtensionService#_doActivateExtension vscode.git, startup: true, activationEvent: '*'
+2026-02-13 14:21:06.499 [info] ExtensionService#_doActivateExtension vscode.github, startup: true, activationEvent: '*'
+2026-02-13 14:21:06.514 [info] Extension activated success: vscodevim.vim — 247ms (code loading: 142ms, activate call: 3ms, activate resolved: 102ms)
+2026-02-13 14:21:06.573 [info] Extension activated success: vscode.github — 36ms (code loading: 29ms, activate call: 2ms, activate resolved: 5ms)
+2026-02-13 14:21:06.644 [info] Extension activated success: vscode.git — 275ms (code loading: 160ms, activate call: 5ms, activate resolved: 110ms)
+2026-02-13 14:21:06.651 [info] Eager extensions activated
+2026-02-13 14:21:06.699 [info] ExtensionService#_doActivateExtension anysphere.cursor-android-emulator-connect, startup: false, activationEvent: 'onStartupFinished'
+2026-02-13 14:21:06.731 [info] ExtensionService#_doActivateExtension cursor.cursor-browser-automation, startup: false, activationEvent: 'onStartupFinished'
+2026-02-13 14:21:06.755 [info] ExtensionService#_doActivateExtension anysphere.cursor-commits, startup: false, activationEvent: 'onStartupFinished'
+2026-02-13 14:21:06.815 [info] ExtensionService#_doActivateExtension anysphere.cursor-retrieval, startup: false, activationEvent: 'onStartupFinished'
+2026-02-13 14:21:06.960 [info] Extension activated success: anysphere.cursor-agent-exec — 1082ms (code loading: 770ms, activate call: 11ms, activate resolved: 301ms)
+2026-02-13 14:21:06.960 [info] Eager extensions activated
+2026-02-13 14:21:07.115 [info] ExtensionService#_doActivateExtension anysphere.cursor-deeplink, startup: false, activationEvent: 'onStartupFinished'
+2026-02-13 14:21:07.217 [info] ExtensionService#_doActivateExtension anysphere.cursor-ios-simulator-connect, startup: false, activationEvent: 'onStartupFinished'
+2026-02-13 14:21:07.220 [info] Extension activated success: anysphere.cursor-always-local — 625ms (code loading: 617ms, activate call: 7ms, activate resolved: 1ms)
+2026-02-13 14:21:07.261 [info] Extension activated success: anysphere.cursor-retrieval — 432ms (code loading: 394ms, activate call: 2ms, activate resolved: 36ms)
+2026-02-13 14:21:07.407 [info] ExtensionService#_doActivateExtension anysphere.cursor-mcp, startup: false, activationEvent: 'onStartupFinished'
+2026-02-13 14:21:07.443 [error] Error: ENOENT: no such file or directory, open '/home/michael/.config/Cursor/User/globalStorage/vscodevim.vim/.registers'
+2026-02-13 14:21:07.940 [info] ExtensionService#_doActivateExtension anysphere.cursor-shadow-workspace, startup: false, activationEvent: 'onStartupFinished'
+2026-02-13 14:21:08.050 [info] ExtensionService#_doActivateExtension vscode.debug-auto-launch, startup: false, activationEvent: 'onStartupFinished'
+2026-02-13 14:21:08.052 [info] ExtensionService#_doActivateExtension vscode.merge-conflict, startup: false, activationEvent: 'onStartupFinished'
+2026-02-13 14:21:08.100 [info] Extension activated success: anysphere.cursor-android-emulator-connect — 35ms (code loading: 31ms, activate call: 3ms, activate resolved: 1ms)
+2026-02-13 14:21:08.106 [info] Extension activated success: cursor.cursor-browser-automation — 28ms (code loading: 23ms, activate call: 2ms, activate resolved: 3ms)
+2026-02-13 14:21:08.113 [info] Extension activated success: anysphere.cursor-commits — 364ms (code loading: 359ms, activate call: 0ms, activate resolved: 5ms)
+2026-02-13 14:21:08.114 [info] Extension activated success: anysphere.cursor-deeplink — 103ms (code loading: 102ms, activate call: 1ms, activate resolved: 0ms)
+2026-02-13 14:21:08.115 [info] Extension activated success: anysphere.cursor-ios-simulator-connect — 189ms (code loading: 189ms, activate call: 0ms, activate resolved: 0ms)
+2026-02-13 14:21:08.119 [info] Extension activated success: anysphere.cursor-mcp — 533ms (code loading: 531ms, activate call: 2ms, activate resolved: 0ms)
+2026-02-13 14:21:08.125 [info] Extension activated success: anysphere.cursor-shadow-workspace — 110ms (code loading: 109ms, activate call: 1ms, activate resolved: 0ms)
+2026-02-13 14:21:08.127 [info] Extension activated success: vscode.debug-auto-launch — 3ms (code loading: 2ms, activate call: 0ms, activate resolved: 1ms)
+2026-02-13 14:21:08.156 [info] Extension activated success: vscode.merge-conflict — 38ms (code loading: 23ms, activate call: 8ms, activate resolved: 7ms)
+2026-02-13 14:21:08.481 [info] ExtensionService#_doActivateExtension vscode.github-authentication, startup: false, activationEvent: 'onAuthenticationRequest:github'
+2026-02-13 14:21:08.559 [info] Extension activated success: vscode.github-authentication — 43ms (code loading: 33ms, activate call: 5ms, activate resolved: 5ms)
+2026-02-13 14:23:26.558 [info] ExtensionService#_doActivateExtension vscode.npm, startup: false, activationEvent: 'onTerminalQuickFixRequest:ms-vscode.npm-command'
+2026-02-13 14:23:26.865 [info] Extension activated success: vscode.npm — 225ms (code loading: 40ms, activate call: 2ms, activate resolved: 183ms)
+2026-02-13 14:23:29.210 [info] Extension host terminating: renderer closed the MessagePort
+2026-02-13 14:23:29.215 [info] Extension host terminating: renderer closed the MessagePort
+2026-02-13 14:23:29.217 [info] Extension host terminating: renderer closed the MessagePort
+2026-02-13 14:23:29.217 [info] Extension host with pid 22281 exiting with code 0
+2026-02-13 14:23:29.221 [info] Extension host with pid 22280 exiting with code 0
+2026-02-13 14:23:29.221 [info] Extension host terminating: renderer closed the MessagePort
+2026-02-13 14:23:29.222 [error] Error: ENOENT: no such file or directory, open '/home/michael/.config/Cursor/User/globalStorage/vscodevim.vim/.registers'
+2026-02-13 14:23:29.223 [info] Extension host with pid 22279 exiting with code 0
+2026-02-13 14:23:29.267 [error] Canceled: Canceled
+	at new out (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:46:119405)
+	at Al._remoteCall (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:46:126068)
+	at r.<computed>.a.charCodeAt.r.<computed> (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:46:122692)
+	at CNe._doExecuteCommand (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:140:49822)
+	at CNe.executeCommand (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:140:49261)
+	at t.registerCommand.description (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:140:48525)
+	at CNe._executeContributedCommand (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:140:50392)
+	at CNe._doExecuteCommand (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:140:49394)
+	at CNe.executeCommand (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:140:49261)
+	at Object.executeCommand (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:203:145236)
+	at vke.N [as value] (/usr/share/cursor/resources/app/extensions/git/dist/main.js:2:110885)
+	at x._deliver (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:44:2961)
+	at x._deliverQueue (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:44:3052)
+	at x.fire (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:44:3389)
+	at Object.v [as dispose] (/usr/share/cursor/resources/app/extensions/git/dist/main.js:2:179707)
+	at /usr/share/cursor/resources/app/extensions/git/dist/main.js:2:186072
+	at Array.forEach (<anonymous>)
+	at R.dispose (/usr/share/cursor/resources/app/extensions/git/dist/main.js:2:186059)
+	at bbe.<anonymous> (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:135:10091)
+	at bbe.dispose (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:135:10187)
+	at bbe.<anonymous> (/usr/share/cursor/resources/app/extensions/git/dist/main.js:2:113362)
+	at bbe.dispose (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:135:10187)
+	at yi (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:42:706)
+	at file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:144:20479
+	at file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:42:1019
+	at Object.dispose (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:25:1256)
+	at hgs._deactivate (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:144:15323)
+	at file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:144:12594
+	at Array.map (<anonymous>)
+	at hgs._deactivateAll (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:144:12582)
+	at hgs.terminate (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:144:12936)
+	at det.terminate (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:146:1617)
+	at Jr (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:671:7954)
+	at MessagePortMain.<anonymous> (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:671:4385)
+	at MessagePortMain.emit (node:events:519:28)
+	at MessagePortMain._internalPort.emit (node:electron/js2c/utility_init:2:2959) setContext undefined
+2026-02-13 14:23:29.268 [error] Canceled: Canceled
+	at new out (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:46:119405)
+	at Al._remoteCall (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:46:126068)
+	at r.<computed>.a.charCodeAt.r.<computed> (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:46:122692)
+	at CNe._doExecuteCommand (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:140:49822)
+	at CNe.executeCommand (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:140:49261)
+	at t.registerCommand.description (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:140:48525)
+	at CNe._executeContributedCommand (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:140:50392)
+	at CNe._doExecuteCommand (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:140:49394)
+	at CNe.executeCommand (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:140:49261)
+	at Object.executeCommand (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:203:145236)
+	at set hasGitHubRepositories (/usr/share/cursor/resources/app/extensions/github/dist/extension.js:2:270497)
+	at /usr/share/cursor/resources/app/extensions/github/dist/extension.js:2:271447
+	at vke.value (/usr/share/cursor/resources/app/extensions/git/dist/main.js:2:600709)
+	at x._deliver (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:44:2961)
+	at x._deliverQueue (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:44:3052)
+	at x.fire (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:44:3389)
+	at Object.v [as dispose] (/usr/share/cursor/resources/app/extensions/git/dist/main.js:2:179707)
+	at /usr/share/cursor/resources/app/extensions/git/dist/main.js:2:186072
+	at Array.forEach (<anonymous>)
+	at R.dispose (/usr/share/cursor/resources/app/extensions/git/dist/main.js:2:186059)
+	at bbe.<anonymous> (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:135:10091)
+	at bbe.dispose (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:135:10187)
+	at bbe.<anonymous> (/usr/share/cursor/resources/app/extensions/git/dist/main.js:2:113362)
+	at bbe.dispose (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:135:10187)
+	at yi (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:42:706)
+	at file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:144:20479
+	at file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:42:1019
+	at Object.dispose (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:25:1256)
+	at hgs._deactivate (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:144:15323)
+	at file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:144:12594
+	at Array.map (<anonymous>)
+	at hgs._deactivateAll (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:144:12582)
+	at hgs.terminate (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:144:12936)
+	at det.terminate (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:146:1617)
+	at Jr (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:671:7954)
+	at MessagePortMain.<anonymous> (file:///usr/share/cursor/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:671:4385)
+	at MessagePortMain.emit (node:events:519:28)
+	at MessagePortMain._internalPort.emit (node:electron/js2c/utility_init:2:2959) setContext undefined
+2026-02-13 14:23:29.268 [info] Extension host with pid 22259 exiting with code 0

@@ -1,0 +1,4 @@
+Loaded 0 bubble-to-session mappings from persisted state
+Loaded 0 bubble-to-requestId mappings from persisted state
+Initial permissions: approvalMode=ask-every-time
+Permissions updated: approvalMode=allowlist

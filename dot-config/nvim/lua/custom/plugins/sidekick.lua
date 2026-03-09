@@ -26,17 +26,9 @@ return {
     {
       '<leader>ac',
       function()
-        require('sidekick.cli').toggle { name = 'claude', focus = true }
+        require('sidekick.cli').toggle { name = 'gemini', focus = true }
       end,
-      desc = 'Sidekick Claude Toggle',
-      mode = { 'n', 'v' },
-    },
-    {
-      '<leader>ag',
-      function()
-        require('sidekick.cli').toggle { name = 'grok', focus = true }
-      end,
-      desc = 'Sidekick Grok Toggle',
+      desc = 'Sidekick Gemini Toggle',
       mode = { 'n', 'v' },
     },
     {

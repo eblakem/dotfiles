@@ -1,0 +1,15 @@
+[Unit]
+Description=Forgejo Git
+After=network-online.target
+
+[Container]
+Image=codeberg.org/forgejo/forgejo:14
+ContainerName=forgejo
+Network=forgejo
+Environment=FORGEJO__server__ROOT_URL=https://forgejo.local
+Environment=FORGEJO__server__DOMAIN=forgejo.local
+Volume=%h/.config/forgejo/data:/data:Z
+PublishPort=3000:3000
+
+[Install]
+WantedBy=default.target

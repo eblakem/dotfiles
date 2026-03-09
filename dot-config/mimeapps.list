@@ -1,4 +1,3 @@
-
 [Default Applications]
 image/bmp;image/jpeg=sxiv.desktop
 image/bmp;image/png=sxiv.desktop
@@ -24,3 +23,7 @@ x-scheme-handler/https=chromium.desktop
 x-scheme-handler/about=chromium.desktop
 x-scheme-handler/unknown=chromium.desktop
 inode/directory=nautilus.desktop
+x-scheme-handler/mailto=chromium.desktop
+
+[Added Associations]
+application/pdf=libreoffice-draw.desktop;

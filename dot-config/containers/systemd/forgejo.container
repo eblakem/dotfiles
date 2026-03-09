@@ -1,15 +1,18 @@
 [Unit]
-Description=Forgejo Git
-After=network-online.target
+Description=Forgejo Git Service
 
 [Container]
 Image=codeberg.org/forgejo/forgejo:14
-ContainerName=forgejo
-Network=forgejo
-Environment=FORGEJO__server__ROOT_URL=https://forgejo.local
-Environment=FORGEJO__server__DOMAIN=forgejo.local
-Volume=%h/.config/forgejo/data:/data:Z
+Volume=forgejo_data:/data
 PublishPort=3000:3000
+PublishPort=2222:22
+Environment=FORGEJO__database__DB_TYPE=sqlite3
+Environment=FORGEJO__packages__ENABLED=true
+Environment=FORGEJO__server__DOMAIN=localhost
+Environment=FORGEJO__server__ROOT_URL=http://localhost:3000/
+
+[Service]
+Restart=always
 
 [Install]
 WantedBy=default.target

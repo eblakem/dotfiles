@@ -32,25 +32,16 @@ require("snacks").setup({
 				{
 					icon = " ",
 					mode = "n",
-					key = "B",
+					key = "\\",
 					desc = "File Browser",
 					action = ":lua Snacks.explorer()",
 				},
 				{ icon = " ", key = "s", desc = "Restore Session", section = "session" },
 				{
-					icon = " ",
-					icon_hl = "Title",
-					desc = "NeoGit",
-					key = "n",
-					keymap = "<leader>ng",
-					action = ":Neogit",
-				},
-				{
 					icon = " ",
 					icon_hl = "Title",
 					desc = "Terminal",
-					key = "`",
-					keymap = "<A-`>",
+					key = "t",
 					action = ":lua Snacks.terminal()",
 				},
 				{

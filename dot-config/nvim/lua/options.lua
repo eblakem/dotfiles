@@ -18,3 +18,4 @@ vim.o.termguicolors = true
 vim.o.updatetime = 50
 vim.o.winborder = "rounded"
 vim.o.wrap = false
+vim.opt.clipboard = "unnamedplus"

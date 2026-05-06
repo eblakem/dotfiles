@@ -1,5 +1,9 @@
 {
   "plugins": {
+    "autoreload.nvim": {
+      "rev": "6b58960cf12d008e821388afb4b5c75a48e1eb9f",
+      "src": "https://github.com/ccntrq/autoreload.nvim"
+    },
     "blink.cmp": {
       "rev": "451168851e8e2466bc97ee3e026c3dcb9141ce07",
       "src": "https://github.com/saghen/blink.cmp"

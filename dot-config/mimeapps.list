@@ -27,5 +27,5 @@ x-scheme-handler/mailto=chromium.desktop
 text/plain=nvim.desktop
 
 [Added Associations]
-application/pdf=libreoffice-draw.desktop;org.pwmt.zathura-pdf-mupdf.desktop;
+application/pdf=chromium.desktop;libreoffice-draw.desktop;org.pwmt.zathura-pdf-mupdf.desktop;
 image/jpeg=org.qutebrowser.qutebrowser.desktop;

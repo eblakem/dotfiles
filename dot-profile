@@ -1,0 +1,10 @@
+export MY_LONGITUDE=153.03
+export MY_LATITUDE=27.47
+export GIT_EDITOR=nvim
+export EDITOR=nvim
+export VISUAL=nvim
+export BROWSER=chromium
+export GIT_AUTHOR_NAME=michael
+export GIT_AUTHOR_EMAIL=michael.blake@health.qld.gov.au
+export GIT_COMMITTER_NAME=michael
+export GIT_COMMITTER_EMAIL=michael.blake@health.qld.gov.au

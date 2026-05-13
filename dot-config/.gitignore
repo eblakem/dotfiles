@@ -1,15 +1,11 @@
-*.scm
-dconf/
-assets
-Bitwarden/
 pulse/
 chromium/
-libreoffice/
-photoflare/
-qBittorrent/
+Bitwarden/
+GIMP/
+Thunar/
+dconf/
+google-chrome-for-testing/
 go/
-mise/
-mise.toml
+libreoffice/
 spotify/
-Code - OSS/
-'Valve Corporation'/
+

@@ -24,7 +24,7 @@
 		"9": "9",
 		"10": "10",
 		"active": "",
-		"default": "" 
+		"default": ""
 	},
 },
 
@@ -77,8 +77,8 @@
   "tooltip-format-connected": "{controller_alias}\t{controller_address}\n\n{num_connections} connected\n\n{device_enumerate}",
   "tooltip-format-enumerate-connected": "{device_alias}\t{device_address}",
   "tooltip-format-enumerate-connected-battery": "{device_alias}\t{device_address}\t{device_battery_percentage}%",
-  "on-click": "rofi-bluetooth",
- }, 
+  "on-click": "blueman-manager",
+ },
 
 "network": {
       "format-wifi": " ",
@@ -87,7 +87,7 @@
       "tooltip-format": "{ipaddr}",
       "tooltip-format-wifi": "{essid} ({signalStrength}%)  | {ipaddr}",
       "tooltip-format-ethernet": "{ifname} 🖧 | {ipaddr}",
-      "on-click": "networkmanager_dmenu"
+      "on-click": "nm-connection-editor"
     },
 
 "battery": {
@@ -162,7 +162,7 @@
 },
 
 "temperature": {
-  "format": " {temperatureC}°C",            
+  "format": " {temperatureC}°C",
   "format-critical": " {temperatureC}°C",
   "interval": 1,
   "critical-threshold": 80,
@@ -188,6 +188,7 @@
   "on-click-right": "pavucontrol",
   "tooltip-format": "{icon}  {volume}%"
 },
+
 
 "jack": {
     "format": "{} 󱎔",

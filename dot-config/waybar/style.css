@@ -28,6 +28,7 @@ window#waybar {
   background: #000000;
 }
 
+#custom-power_profile,
 #battery,
 #custom-clipboard,
 #custom-colorpicker,
@@ -60,7 +61,7 @@ window#waybar {
 
 
 #workspaces {
-  margin: 0; 
+  margin: 0;
 }
 
 #workspaces button {
@@ -100,3 +101,48 @@ window#waybar {
         color: #000000;
     }
 }
+
+/* Define the subtle pulse effect */
+@keyframes power_pulse {
+    0% {
+        color: #ff5555;
+        opacity: 1.0;
+    }
+    50% {
+        color: #ff2222;
+        opacity: 0.5; /* Dims slightly at the bottom of the pulse */
+    }
+    100% {
+        color: #ff5555;
+        opacity: 1.0;
+    }
+}
+
+
+/* Base styles for the profile module */
+#custom-power_profile {
+    background-color: transparent;
+    margin-right: 10px;
+}
+
+/* Red for Performance */
+#custom-power_profile.performance {
+    color: #ff5555;
+    animation-name: power_pulse;
+    animation-duration: 2.0s;
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite;
+}
+
+/* Blue for Balanced */
+#custom-power_profile.balanced {
+    color: #8be9fd;
+    font-size: 12px;
+}
+
+/* Green for Power Saver */
+#custom-power_profile.power-saver {
+    color: #50fa7b;
+    font-size: 12px;
+}
+

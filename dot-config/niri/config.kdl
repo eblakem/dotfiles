@@ -316,6 +316,7 @@ window-rule {
 window-rule {
     match app-id=r#"Remote Desktop Connection$"# title=""
     open-floating true
+    open-on-output "DVI-I-2"
 }
 
 

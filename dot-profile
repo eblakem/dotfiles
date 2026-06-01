@@ -4,7 +4,7 @@ export GIT_EDITOR=nvim
 export EDITOR=nvim
 export VISUAL=nvim
 export BROWSER=chromium
-export GIT_AUTHOR_NAME=michael
-export GIT_AUTHOR_EMAIL=michael.blake@health.qld.gov.au
-export GIT_COMMITTER_NAME=michael
-export GIT_COMMITTER_EMAIL=michael.blake@health.qld.gov.au
+
+
+# Added by Antigravity CLI installer
+export PATH="/home/michael/.local/bin:$PATH"

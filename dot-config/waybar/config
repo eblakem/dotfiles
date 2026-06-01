@@ -2,7 +2,7 @@
   "layer": "top", "position": "bottom",
   "modules-left": ["custom/logo", "clock" ],
   "modules-center": [],
-  "modules-right": [ "backlight", "idle_inhibitor", "bluetooth", "wireplumber", "network",  "battery" ],
+  "modules-right": [ "backlight", "idle_inhibitor", "bluetooth", "wireplumber", "network",  "battery", "custom/power_profile" ],
   "reload_style_on_change":true,
 
   "custom/logo": {
@@ -90,6 +90,16 @@
       "on-click": "nm-connection-editor"
     },
 
+"custom/power_profile": {
+    "exec": "profile=$(tlpctl get); if [ \"$profile\" = \"performance\" ]; then echo '{\"text\":\"\",\"class\":\"performance\"}'; elif [ \"$profile\" = \"balanced\" ]; then echo '{\"text\":\"\",\"class\":\"balanced\"}'; else echo '{\"text\":\"🌱\",\"class\":\"power-saver\"}'; fi",
+    "interval": 2,
+    "return-type": "json",
+    "format": "{}",
+    "on-click": "tlpctl performance",
+    "on-click-middle": "tlpctl balanced",
+    "on-click-right": "tlpctl power-saver",
+    "tooltip": false
+},
 "battery": {
     "interval":1,
         "states": {

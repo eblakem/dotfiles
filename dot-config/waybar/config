@@ -91,7 +91,7 @@
     },
 
 "custom/power_profile": {
-    "exec": "profile=$(tlpctl get); if [ \"$profile\" = \"performance\" ]; then echo '{\"text\":\"\",\"class\":\"performance\"}'; elif [ \"$profile\" = \"balanced\" ]; then echo '{\"text\":\"\",\"class\":\"balanced\"}'; else echo '{\"text\":\"🌱\",\"class\":\"power-saver\"}'; fi",
+    "exec": "profile=$(tlpctl get); if [ \"$profile\" = \"performance\" ]; then echo '{\"text\":\"\",\"class\":\"performance\"}'; elif [ \"$profile\" = \"balanced\" ]; then echo '{\"text\":\"󰠠\",\"class\":\"balanced\"}'; else echo '{\"text\":\"🌱\",\"class\":\"power-saver\"}'; fi",
     "interval": 2,
     "return-type": "json",
     "format": "{}",

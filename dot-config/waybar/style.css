@@ -137,7 +137,7 @@ window#waybar {
 /* Blue for Balanced */
 #custom-power_profile.balanced {
     color: #8be9fd;
-    font-size: 12px;
+    font-size: 14px;
 }
 
 /* Green for Power Saver */

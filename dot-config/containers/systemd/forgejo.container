@@ -4,12 +4,12 @@ Description=Forgejo Git Service
 [Container]
 Image=codeberg.org/forgejo/forgejo:14
 Volume=forgejo_data:/data
-PublishPort=3000:3000
-PublishPort=2222:22
+Network=host
 Environment=FORGEJO__database__DB_TYPE=sqlite3
 Environment=FORGEJO__packages__ENABLED=true
 Environment=FORGEJO__server__DOMAIN=localhost
 Environment=FORGEJO__server__ROOT_URL=http://localhost:3000/
+Environment=FORGEJO__packages__MAX_SIZE=5368709120
 
 [Service]
 Restart=always

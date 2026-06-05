@@ -2,7 +2,7 @@
   "layer": "top", "position": "bottom",
   "modules-left": ["custom/logo", "clock" ],
   "modules-center": [],
-  "modules-right": [ "backlight", "idle_inhibitor", "bluetooth", "wireplumber", "network",  "battery", "custom/power_profile" ],
+  "modules-right": [ "backlight", "idle_inhibitor", "disk", "bluetooth", "wireplumber", "network",  "battery", "custom/power_profile" ],
   "reload_style_on_change":true,
 
   "custom/logo": {

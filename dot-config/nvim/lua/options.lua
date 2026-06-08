@@ -19,6 +19,7 @@ vim.o.updatetime = 50
 vim.o.winborder = "rounded"
 vim.o.wrap = false
 vim.opt.clipboard = "unnamedplus"
+vim.o.textwidth = 80
 
 vim.g.clipboard = {
 	name = "OSC 52",

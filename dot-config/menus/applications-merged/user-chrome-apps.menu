@@ -7,9 +7,13 @@
     <Name>chrome-apps</Name>
     <Directory>chrome-apps.directory</Directory>
     <Include>
-        <Filename>chrome-cifhbcnohmdccbgoicgdjpfamggdegmo-Default.desktop</Filename>
         <Filename>chrome-faolnafnngnfdaknnbpnkhgohbobgegn-Default.desktop</Filename>
         <Filename>chrome-mjoklplbddabcmpepnokjaffbmgbkkgg-Default.desktop</Filename>
+        <Filename>chrome-ilmgmogedobmcfegdjcibiiaodmdenpf-Default.desktop</Filename>
+        <Filename>chrome-ogeeogpgcggbpkjfiaipmngedjnpilmk-Default.desktop</Filename>
+        <Filename>chrome-pjibgclleladliembfgfagdaldikeohf-Default.desktop</Filename>
+        <Filename>chrome-cifhbcnohmdccbgoicgdjpfamggdegmo-Default.desktop</Filename>
+        <Filename>chrome-gjcmcplpgihbecacndmmbaenpfgimlec-Default.desktop</Filename>
     </Include>
 </Menu>
 </Menu>

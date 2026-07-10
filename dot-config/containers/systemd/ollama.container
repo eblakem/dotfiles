@@ -1,0 +1,14 @@
+[Unit]
+Description=Ollama - local embedding/LLM models (pinecone-experiment)
+
+[Container]
+Image=docker.io/ollama/ollama:latest
+Volume=ollama_data:/root/.ollama
+PublishPort=11434:11434
+
+[Service]
+Restart=always
+TimeoutStartSec=600
+
+[Install]
+WantedBy=default.target

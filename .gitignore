@@ -1,0 +1,6 @@
+# Machine-local application state / caches, not real config
+dot-config/QtProject.conf
+dot-config/create-next-app-nodejs/
+dot-config/nextjs-nodejs/
+dot-config/qBittorrent/
+dot-config/vlc/

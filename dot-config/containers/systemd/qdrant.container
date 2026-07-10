@@ -1,0 +1,14 @@
+[Unit]
+Description=Qdrant Vector Database (pinecone-experiment)
+
+[Container]
+Image=docker.io/qdrant/qdrant:latest
+Volume=qdrant_data:/qdrant/storage
+PublishPort=6333:6333
+PublishPort=6334:6334
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,17 @@
+[Unit]
+Description=OpenProject
+
+[Container]
+Image=docker.io/openproject/openproject:17
+Volume=openproject_pgdata:/var/openproject/pgdata
+Volume=openproject_assets:/var/openproject/assets
+PublishPort=8000:80
+Environment=SECRET_KEY_BASE=290f52ba979699a78d2558b1d002574348c8113cbd6d80c9abf115cf6b7ebc418187da4c04c680fd534e73441e90d6684bdad659eaa71c05930cdfe013ef5dd3
+Environment=OPENPROJECT_HOST__NAME=localhost:8000
+Environment=OPENPROJECT_HTTPS=false
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

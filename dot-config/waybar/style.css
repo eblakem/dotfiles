@@ -146,3 +146,32 @@ window#waybar {
     font-size: 12px;
 }
 
+#custom-qld_price {
+    color: #5fd1fa;
+    margin-left: 10px;
+}
+
+#custom-qld_price.warning {
+    background-color: #ffbe61;
+    color: black;
+}
+
+#custom-qld_price.critical {
+    background-color: #f53c3c;
+    color: #ffffff;
+    animation-name: blink;
+    animation-duration: 0.5s;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+    animation-direction: alternate;
+}
+
+#custom-qld_price.negative {
+    color: #50fa7b;
+}
+
+#custom-qld_price.stale,
+#custom-qld_price.error {
+    color: #888888;
+}
+

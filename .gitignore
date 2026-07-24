@@ -5,3 +5,10 @@ dot-config/nextjs-nodejs/
 dot-config/qBittorrent/
 dot-config/vlc/
 dot-config/pavucontrol.ini
+
+# Secrets - never commit
+dot-config/containers/systemd/*.env
+dot-config/sops/age/
+
+# Stray log output, not real config
+dot-config/niri/scripts/nohup.out

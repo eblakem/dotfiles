@@ -1,3 +1,5 @@
 [user]
 	name = michael
 	email = michael.blake@health.qld.gov.au
+[init]
+	defaultBranch = main

@@ -1,0 +1,20 @@
+[Unit]
+Description=OpenProject (all-in-one)
+After=network-online.target
+
+[Container]
+Image=docker.io/openproject/openproject:17
+Volume=openproject_pgdata:/var/openproject/pgdata
+Volume=openproject_assets:/var/openproject/assets
+PublishPort=9000:80
+Environment=OPENPROJECT_HTTPS=false
+Environment=OPENPROJECT_HOST__NAME=localhost:9000
+Environment=OPENPROJECT_DEFAULT__LANGUAGE=en
+EnvironmentFile=%h/.config/containers/systemd/openproject.env
+
+[Service]
+Restart=always
+TimeoutStartSec=900
+
+[Install]
+WantedBy=default.target

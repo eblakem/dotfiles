@@ -26,9 +26,11 @@ inode/directory=thunar.desktop
 x-scheme-handler/mailto=chromium.desktop
 text/plain=nvim.desktop
 x-scheme-handler/claude-cli=claude-code-url-handler.desktop
+text/markdown=nvim.desktop
 
 [Added Associations]
 application/pdf=chromium.desktop;libreoffice-draw.desktop;org.pwmt.zathura-pdf-mupdf.desktop;
-image/jpeg=org.qutebrowser.qutebrowser.desktop;
+image/jpeg=gimp.desktop;org.qutebrowser.qutebrowser.desktop;
 video/mp4=vlc.desktop;
 application/x-subrip=libreoffice-writer.desktop;
+text/markdown=nvim.desktop;

@@ -169,7 +169,8 @@
     "return-type": "json",
     "exec": "~/.config/waybar/scripts/qld_price.py",
     "interval": 60,
-    "on-click": "firefox https://www.aemo.com.au/energy-systems/electricity/national-electricity-market-nem/data-nem/data-dashboard-nem"
+    "on-click": "firefox https://www.aemo.com.au/energy-systems/electricity/national-electricity-market-nem/data-nem/data-dashboard-nem",
+    "on-click-right": "foot -T 'QLD Price' -W 110x45 ~/.config/waybar/scripts/qld_price_tui.py"
   }
 
 }

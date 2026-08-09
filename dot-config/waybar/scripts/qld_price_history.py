@@ -256,6 +256,29 @@ def actual_network_charge(stamped_usage: list[tuple[str, float]], plan: qp.Plan)
     return total
 
 
+def estimated_network_charge(stamps: list[str], usage_kwh: float, plan: qp.Plan) -> float:
+    """Estimated network charge for `usage_kwh` spread evenly across
+    `stamps` - the same flat-load assumption estimate_cost() already uses
+    for the wholesale energy charge, just extended to cover network too.
+    Classifies each interval's TOU period the same way as
+    actual_network_charge(), just working from an assumed flat per-interval
+    usage instead of real per-interval usage (which isn't available when
+    there's no import to work from - that's the whole reason this estimate
+    exists). Less trustworthy than actual_network_charge() whenever usage
+    isn't actually flat across the window (e.g. a controlled-load spike
+    concentrated in one TOU period)."""
+    n = len(stamps)
+    if n == 0:
+        return 0.0
+    flat_usage = usage_kwh / n
+    total = 0.0
+    for ts in stamps:
+        hh, mm = int(ts[11:13]), int(ts[14:16])
+        hour = (hh - 1) % 24 if mm == 0 else hh
+        total += flat_usage * qp.network_rate_for_period(qp.tou_period_for_hour(hour), plan)
+    return total
+
+
 def wholesale_usage_charge(
     prices_kwh: list[float], usage_kwh: float, plan: qp.Plan, cap: float, hours: float
 ) -> tuple[float, int]:

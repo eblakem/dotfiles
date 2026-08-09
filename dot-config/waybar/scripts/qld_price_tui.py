@@ -23,7 +23,8 @@ no modelling, no flat-load assumption, no manual entry needed. The Usage
 days without an import.
 
 Press `m` for a month summary page: a table of every saved day's whole-day
-usage/cost plus that day's average AEMO wholesale spot price, for the
+usage/cost, that day's average AEMO wholesale spot price, and (where actual
+import data covers the day) its average 5-minute-interval usage, for the
 currently viewed month (←/→ to change month), with `e` to export it as a
 Markdown table (see summary_export_path()).
 
@@ -39,9 +40,12 @@ import argparse
 import curses
 import json
 import os
+import textwrap
+import urllib.error
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
+import qld_globird_fetch as qgf
 import qld_price as qp
 import qld_price_history as qph
 
@@ -90,20 +94,6 @@ def fmt_opt(v: float | None) -> str:
     return "" if v is None else f"{v:g}"
 
 
-def chunk(seq: list, n: int) -> list[list]:
-    """Split seq into n roughly-equal contiguous chunks (n clamped to len(seq))."""
-    if not seq:
-        return []
-    n = max(1, min(n, len(seq)))
-    k, m = divmod(len(seq), n)
-    chunks, i = [], 0
-    for j in range(n):
-        size = k + (1 if j < m else 0)
-        chunks.append(seq[i : i + size])
-        i += size
-    return chunks
-
-
 def month_days(year: int, month: int) -> list[date]:
     first = date(year, month, 1)
     next_first = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
@@ -114,71 +104,248 @@ def month_days(year: int, month: int) -> list[date]:
     return days
 
 
-def day_avgs(rows: list[tuple[str, float]]) -> dict[date, float]:
-    """Average spot price ($/kWh) per calendar day, from a list of
-    (SETTLEMENTDATE, RRP $/MWh) rows such as qld_price_history.fetch_month()
-    returns."""
-    buckets: dict[date, list[float]] = {}
-    for ts, price in rows:
+def interval_prices_from_rows(rows: list[tuple[str, float]]) -> dict[str, float]:
+    """Reduces AEMO (SETTLEMENTDATE, RRP $/MWh) rows (as returned by
+    qld_price_history.fetch_month()) to {SETTLEMENTDATE: price $/kWh}, in
+    the same raw, GST-exclusive convention as qld_price.DEFAULT_CAP - so it
+    can be compared directly against CAP interval-by-interval."""
+    return {ts: rrp / 1000.0 for ts, rrp in rows}
+
+
+def _interval_lost_cap(
+    usage: float, ts: str, cap_kwh_per_interval: float, interval_prices: dict[str, float] | None
+) -> bool:
+    """Whether a 5-min interval actually lost the wholesale price cap's
+    protection - i.e. cost something - not just whether demand exceeded
+    PLAN.cap_demand_kw. Per qld_price.Plan.estimate_hourly_cost():
+    effective_price = min(price_kwh, cap) when within the demand cap, else
+    price_kwh outright. If price_kwh was already <= cap, that's the same
+    number either way - exceeding the *demand* cap only actually costs
+    something when the AEMO spot price for that same interval was itself
+    spiking above CAP. `interval_prices` missing this timestamp (fetch
+    failed, or a very recent interval not yet in AEMO's published archive)
+    defaults to "no", per the same reasoning: don't claim a spike without
+    the data to back it."""
+    if usage <= cap_kwh_per_interval:
+        return False
+    if interval_prices is None:
+        return True
+    price = interval_prices.get(ts)
+    return price is not None and price > CAP
+
+
+def day_interval_stats(
+    actual_data: dict[str, tuple[float, float]],
+    year: int,
+    month: int,
+    interval_prices: dict[str, float] | None = None,
+) -> dict[date, dict]:
+    """Per-calendar-day average 5-minute-interval usage (kWh) in
+    `year`/`month`, computed directly from the real imported readings in
+    `actual_data` (see qld_price_history.sync_actual_data()) - not day-total
+    usage divided by an assumed interval count, so it stays exact even for a
+    day with only partial import coverage. Each entry also counts how many
+    of that day's intervals actually lost PLAN's demand-cap protection (see
+    _interval_lost_cap() - demand over cap_demand_kw *and* the AEMO spot
+    price for that interval itself over CAP, from `interval_prices` if
+    given; otherwise demand alone, same as before)."""
+    buckets: dict[date, list[tuple[str, float]]] = {}
+    for ts, (usage, _charge) in actual_data.items():
         d = datetime.strptime(ts[:10], "%Y/%m/%d").date()
-        buckets.setdefault(d, []).append(price / 1000.0)
-    return {d: sum(prices) / len(prices) for d, prices in buckets.items()}
+        if d.year == year and d.month == month:
+            buckets.setdefault(d, []).append((ts, usage))
+    cap_kwh_per_interval = PLAN.cap_demand_kw / 12
+    stats = {}
+    for d, items in buckets.items():
+        usages = [u for _ts, u in items]
+        stats[d] = {
+            "avg": sum(usages) / len(usages),
+            "over_cap": sum(1 for ts, u in items if _interval_lost_cap(u, ts, cap_kwh_per_interval, interval_prices)),
+        }
+    return stats
+
+
+def month_over_cap_ranges(
+    actual_data: dict[str, tuple[float, float]],
+    year: int,
+    month: int,
+    interval_prices: dict[str, float] | None = None,
+) -> list[tuple[str, str, int, int]]:
+    """Which clock-time windows commonly cost something by pushing usage
+    over PLAN's demand cap while the AEMO spot price was also spiking (see
+    _interval_lost_cap()) this month: for every 5-min interval time-of-day
+    (e.g. "17:35") that lost cap protection on at least one day, how many
+    distinct days it happened on and how many times total - then merges
+    consecutive 5-min slots that share the same day-count into a single
+    (start, end, day_count, total_count) range, so a sustained recurring
+    block (e.g. "same ~90min every evening") reads as one row instead of a
+    dozen near-identical ones. Sorted by day-count then start time
+    descending/ascending respectively, so the most persistent, widest-
+    reaching windows surface first - that kind of pattern points at a
+    specific appliance/habit, unlike a single day's one-off spike
+    (day_count 1, which still appears, just ranked last)."""
+    cap_kwh_per_interval = PLAN.cap_demand_kw / 12
+    days_by_time: dict[str, set[date]] = {}
+    counts_by_time: dict[str, int] = {}
+    for ts, (usage, _charge) in actual_data.items():
+        dt = datetime.strptime(ts, "%Y/%m/%d %H:%M:%S")
+        if dt.year != year or dt.month != month:
+            continue
+        if not _interval_lost_cap(usage, ts, cap_kwh_per_interval, interval_prices):
+            continue
+        clock = dt.strftime("%H:%M")
+        days_by_time.setdefault(clock, set()).add(dt.date())
+        counts_by_time[clock] = counts_by_time.get(clock, 0) + 1
+
+    def to_minutes(clock: str) -> int:
+        h, m = clock.split(":")
+        return int(h) * 60 + int(m)
+
+    ordered = sorted(counts_by_time, key=to_minutes)
+    ranges: list[dict] = []
+    for clock in ordered:
+        day_count = len(days_by_time[clock])
+        mins = to_minutes(clock)
+        cur = ranges[-1] if ranges else None
+        if cur and cur["day_count"] == day_count and mins - to_minutes(cur["end"]) == 5:
+            cur["end"] = clock
+            cur["total"] += counts_by_time[clock]
+        else:
+            ranges.append({"start": clock, "end": clock, "day_count": day_count, "total": counts_by_time[clock]})
+
+    result = [(r["start"], r["end"], r["day_count"], r["total"]) for r in ranges]
+    result.sort(key=lambda r: (-r[2], r[0]))
+    return result
 
 
 def month_summary_rows(
-    history: dict, region: str, year: int, month: int, day_avg: dict[date, float] | None = None
+    history: dict,
+    region: str,
+    year: int,
+    month: int,
+    interval_stats: dict[date, dict] | None = None,
 ) -> list[dict]:
     """Whole-day usage/cost for each saved day in `year`/`month`, pulled from
     the "day" bucket (see set_entry()/App.save() - populated either by
     saving in all-day view, or via the U/C whole-day fields from an hour
-    view). Days with neither saved are skipped. `day_avg` (from day_avgs())
-    fills in each row's average wholesale spot price, when available."""
+    view). Days with neither saved are skipped. `interval_stats` (from
+    day_interval_stats()) fills in each row's average 5-minute-interval
+    usage and demand-cap-exceedance count, when actual import data covers
+    that day."""
     region_entry = history.get(region, {})
-    day_avg = day_avg or {}
+    interval_stats = interval_stats or {}
     rows = []
     for d in month_days(year, month):
         day_bucket = region_entry.get(d.isoformat(), {}).get("day", {})
         usage, cost = day_bucket.get("usage"), day_bucket.get("cost")
         if usage is None and cost is None:
             continue
-        rows.append({"date": d, "usage": usage, "cost": cost, "avg": day_avg.get(d)})
+        stats = interval_stats.get(d, {})
+        rows.append(
+            {
+                "date": d,
+                "usage": usage,
+                "cost": cost,
+                "interval_avg": stats.get("avg"),
+                "interval_over_cap": stats.get("over_cap"),
+            }
+        )
     return rows
 
 
-def format_summary_markdown(region: str, year: int, month: int, rows: list[dict]) -> str:
+def format_summary_markdown(
+    region: str,
+    year: int,
+    month: int,
+    rows: list[dict],
+    over_cap_ranges: list[tuple[str, str, int, int]] | None = None,
+) -> str:
     month_label = date(year, month, 1).strftime("%B %Y")
+    cap_kwh = PLAN.cap_demand_kw / 12
     lines = [
         f"# {region} energy usage -- {month_label}",
         "",
-        "| Date | Usage (kWh) | Cost ($) | Rate ($/kWh) | Day avg spot ($/kWh) |",
+        "| Date | Usage (kWh) | Avg 5-min (kWh) | Cost ($) | Rate ($/kWh) |",
         "| --- | ---: | ---: | ---: | ---: |",
     ]
     total_usage = total_cost = 0.0
     any_usage = any_cost = False
-    avgs = []
+    interval_avgs = []
+    cap_watch = []
     for r in rows:
-        usage, cost, avg = r["usage"], r["cost"], r.get("avg")
+        usage, cost = r["usage"], r["cost"]
+        interval_avg = r.get("interval_avg")
+        over_cap = r.get("interval_over_cap")
         usage_s = f"{usage:.3f}" if usage is not None else "-"
+        interval_avg_s = f"{interval_avg:.4f}" if interval_avg is not None else "-"
         cost_s = f"{cost:.2f}" if cost is not None else "-"
         rate_s = f"{cost / usage:.4f}" if usage and cost is not None else "-"
-        avg_s = f"{avg:.4f}" if avg is not None else "-"
-        lines.append(f"| {r['date'].strftime('%a %d %b')} | {usage_s} | {cost_s} | {rate_s} | {avg_s} |")
+        lines.append(f"| {r['date'].strftime('%a %d %b')} | {usage_s} | {interval_avg_s} | {cost_s} | {rate_s} |")
         if usage is not None:
             total_usage += usage
             any_usage = True
         if cost is not None:
             total_cost += cost
             any_cost = True
-        if avg is not None:
-            avgs.append(avg)
+        if interval_avg is not None:
+            interval_avgs.append(interval_avg)
+        if over_cap:
+            cap_watch.append((r["date"], over_cap))
     total_usage_s = f"{total_usage:.3f}" if any_usage else "-"
     total_cost_s = f"{total_cost:.2f}" if any_cost else "-"
     total_rate_s = f"{total_cost / total_usage:.4f}" if any_usage and any_cost and total_usage else "-"
-    month_avg_s = f"{sum(avgs) / len(avgs):.4f}" if avgs else "-"
-    lines.append(f"| **Total** | **{total_usage_s}** | **{total_cost_s}** | **{total_rate_s}** | **{month_avg_s}** |")
+    month_interval_avg_s = f"{sum(interval_avgs) / len(interval_avgs):.4f}" if interval_avgs else "-"
+    lines.append(
+        f"| **Total** | **{total_usage_s}** | **{month_interval_avg_s}** | **{total_cost_s}** | **{total_rate_s}** |"
+    )
     if not rows:
         lines.append("")
         lines.append("_No saved days this month._")
+    lines.append("")
+    if cap_watch:
+        lines.append(
+            f"**⚠️ Cap watch:** {PLAN.cap_demand_kw:.1f}kW demand cap = {cap_kwh:.4f} kWh/5-min interval. "
+            "Exceeding that alone costs nothing unless the AEMO spot price that same interval was *also* "
+            f"above ${CAP:.2f}/kWh - below that, min(price, cap) is the same number either way (see "
+            "qld_price.Plan.estimate_hourly_cost). Intervals below only count if AEMO data confirms the "
+            "spike; missing/unpublished AEMO data for an interval defaults to not counting it. Day(s) with "
+            "at least one such interval this month:"
+        )
+        for d, over_cap in cap_watch:
+            lines.append(f"- {d.strftime('%a %d %b')}: {over_cap} interval(s) lost cap protection")
+
+        recurring = [r for r in (over_cap_ranges or []) if r[2] >= 2]
+        if recurring:
+            lines.append("")
+            lines.append(
+                "**Common over-cap windows** (same clock-time window lost cap protection - demand over 3kW "
+                "*and* AEMO price spiking above the cap - on multiple days; likely a specific appliance or "
+                "habit, worth checking against what's running then):"
+            )
+            for start, end, day_count, total_count in recurring[:15]:
+                window = start if start == end else f"{start}-{end}"
+                lines.append(f"- {window}: lost cap protection on {day_count} day(s) ({total_count} interval(s) total)")
+            lines.append("")
+            lines.append(
+                "A window at the same clock time every day, with a fairly steady kWh per interval, points at "
+                "a timer/thermostat-controlled load rather than variable behaviour - a hot water system is a "
+                "common culprit. Under WholeSave, controlled load isn't billed as a separate flat rate - it's "
+                "folded into general usage and exposed to the same wholesale/network pricing as everything "
+                "else, so a controlled-load window losing the price cap here is a real cost, not just a "
+                "modelling artifact."
+            )
+        elif over_cap_ranges:
+            lines.append("")
+            lines.append(
+                "No clock-time window lost cap protection on more than one day this month - each "
+                "cap-losing interval looks like a one-off rather than a recurring pattern."
+            )
+    else:
+        lines.append(
+            f"No 5-min interval this month lost the {PLAN.cap_demand_kw:.1f}kW demand cap's protection "
+            f"({cap_kwh:.4f} kWh/5-min interval, with AEMO price confirmed above ${CAP:.2f}/kWh) - either "
+            "usage stayed under the cap, or the spot price never spiked past the cap when it didn't."
+        )
     lines.append("")
     lines.append("---")
     lines.append("")
@@ -191,8 +358,8 @@ def plan_footnote_lines() -> list[str]:
     billed amount as saved/entered, not derived from these) but does make up
     a typical bill: the plan's fixed daily charges and per-kWh network
     charges by time-of-use period, plus how the wholesale energy charge
-    itself (Rate / Day avg spot) is derived. Pulls from the module-level
-    PLAN/CAP - the account's fixed billing config, same as draw_actual()."""
+    itself (Rate) is derived. Pulls from the module-level PLAN/CAP - the
+    account's fixed billing config, same as draw_usage_cost()."""
     p = PLAN
     fixed_daily = p.daily_charge + p.membership_fee + (p.cap_demand_kw * p.cap_fee_per_kw_day)
     lines = [
@@ -217,8 +384,19 @@ def plan_footnote_lines() -> list[str]:
         f"Wholesale energy charge: spot price per 5-min interval (capped at ${CAP:.2f}/kWh) x "
         f"{p.dlf:.5f} DLF x {p.mlf:.4f} MLF, + {p.gst_rate * 100:.0f}% GST.",
         "",
-        "Cost is the amount actually billed (as saved/entered in the app); Rate and Day avg spot "
-        "are wholesale-only figures shown for comparison, not what you were charged.",
+        "Cost is the amount actually billed (as saved/entered in the app); Rate is a wholesale-only "
+        "figure shown for comparison, not what you were charged.",
+        "",
+        "Avg 5-min usage comes from that day's real per-interval readings in imported actual data "
+        "(blank if the day isn't covered by an import) - a rough continuous-draw indicator "
+        "(1 kWh/5min = 12 kW average).",
+        "",
+        f"Your Wholesale Cap Demand is {p.cap_demand_kw:.1f}kW, i.e. {p.cap_demand_kw / 12:.4f} kWh per "
+        f"5-min interval. The price cap (${CAP:.2f}/kWh) only applies to intervals at or under that - go "
+        "over it in a single interval and *that interval* is billed at the full uncapped spot price "
+        "instead (see qld_price.Plan.estimate_hourly_cost). It's a per-interval instantaneous check, not "
+        "a daily or monthly average, so a single short spike (e.g. several appliances running at once) "
+        "can trip it even on a low-usage day - see the Cap watch note above.",
     ]
     return lines
 
@@ -289,7 +467,6 @@ class App:
         self.region_idx = REGIONS.index(region) if region in REGIONS else 0
         self.view = "detail"
         self.summary_year, self.summary_month = day.year, day.month
-        self.summary_day_avg: dict[date, float] = {}
         self.summary_fetch_error = ""
         self.cache: dict[tuple[str, int, int], list[tuple[str, float]]] = {}
         self.history = load_history()
@@ -303,9 +480,42 @@ class App:
         self.lookup: dict[str, float] = {}
         self.hour_stats: dict[int, dict] = {}
         self.actual_data: dict[str, tuple[float, float]] = qph.sync_actual_data()
+        self.actual_fetch_error: list[str] = []
+        self.auto_fetch_actual(self.day)
         self.load_fields_from_history()
         self.fetch_current()
         self.apply_actual_autofill()
+
+    def auto_fetch_actual(self, day: date) -> None:
+        """If `day` has no imported actual-data coverage yet, try pulling it
+        straight from the GloBird portal API (qld_globird_fetch.py) instead
+        of requiring a manual CSV export/drop - mirrors what that script
+        does standalone, just triggered from here since the TUI already
+        opens on yesterday by default and that's usually the day worth
+        having fresh. Only attempted for days that have already finished
+        (not today/future, where there's nothing to fetch yet). Any
+        failure - most commonly an expired session cookie - is recorded in
+        self.actual_fetch_error (a list of lines: a headline, then any
+        recovery steps the failure came with - e.g. qld_globird_fetch's
+        REAUTH_HELP) for draw_detail() to show in full, rather than raised
+        (a stale/missing cookie shouldn't crash the TUI)."""
+        if day >= date.today():
+            return
+        prefix = day.strftime("%Y/%m/%d")
+        if any(ts.startswith(prefix) for ts in self.actual_data):
+            return
+        try:
+            cookie = qgf.load_cookie()
+            data = qgf.fetch_csv(day, day, cookie)
+        except (SystemExit, RuntimeError, urllib.error.URLError, TimeoutError, OSError) as exc:
+            headline = f"GloBird auto-fetch for {day.strftime('%d-%m-%Y')} failed:"
+            detail_lines = [line for line in str(exc).splitlines() if line.strip()]
+            self.actual_fetch_error = [headline, *detail_lines]
+            return
+        qgf.save_export(data, day, day)
+        self.actual_data = qph.sync_actual_data()
+        self.actual_fetch_error = []
+        self.status = f"Auto-fetched {day.strftime('%d-%m-%Y')} from GloBird."
 
     @property
     def region(self) -> str:
@@ -353,9 +563,18 @@ class App:
         for h in range(24):
             _, _, stamps = qph.hour_window(self.day, h)
             rows = [(ts, self.lookup[ts]) for ts in stamps if ts in self.lookup]
+            usage, charge, covered = self.actual_totals(stamps)
+            entry: dict = {}
             if rows:
                 prices = [p / 1000.0 for _, p in rows]
-                self.hour_stats[h] = {"avg": sum(prices) / len(prices), "n": len(rows)}
+                entry["avg"] = sum(prices) / len(prices)
+                entry["n"] = len(rows)
+            if covered:
+                entry["usage"] = usage
+                entry["charge"] = charge
+                entry["covered"] = covered
+            if entry:
+                self.hour_stats[h] = entry
 
     def actual_totals(self, stamps: list[str]) -> tuple[float, float, int]:
         """Sum real (usage_kwh, charge_$) from imported data for the given
@@ -476,8 +695,9 @@ class App:
 
     def load_summary_prices(self, force: bool = False) -> None:
         """Fetch (or reuse from the shared month cache) the AEMO spot price
-        rows for the summary page's region/month, and reduce them to a
-        per-day average ($/kWh). Failures are recorded in
+        rows for the summary page's region/month - used to confirm actual
+        price spikes for the Cap watch feature (see interval_prices_from_rows()
+        / _interval_lost_cap()). Failures are recorded in
         self.summary_fetch_error rather than raised, since day usage/cost
         (the summary's main content) doesn't depend on this succeeding."""
         key = (self.region, self.summary_year, self.summary_month)
@@ -486,10 +706,8 @@ class App:
         try:
             if key not in self.cache:
                 self.cache[key] = qph.fetch_month(*key)
-            self.summary_day_avg = day_avgs(self.cache[key])
             self.summary_fetch_error = ""
         except Exception as exc:  # noqa: BLE001 - surface any fetch failure in the UI
-            self.summary_day_avg = {}
             self.summary_fetch_error = f"Spot price fetch failed: {exc}"
 
     def change_summary_month(self, delta: int) -> None:
@@ -500,10 +718,18 @@ class App:
         self.load_summary_prices()
 
     def export_summary(self) -> None:
-        rows = month_summary_rows(
-            self.history, self.region, self.summary_year, self.summary_month, self.summary_day_avg
+        price_rows = self.cache.get((self.region, self.summary_year, self.summary_month))
+        interval_prices = interval_prices_from_rows(price_rows) if price_rows is not None else None
+        interval_stats = day_interval_stats(
+            self.actual_data, self.summary_year, self.summary_month, interval_prices
         )
-        md = format_summary_markdown(self.region, self.summary_year, self.summary_month, rows)
+        rows = month_summary_rows(
+            self.history, self.region, self.summary_year, self.summary_month, interval_stats
+        )
+        over_cap_ranges = month_over_cap_ranges(
+            self.actual_data, self.summary_year, self.summary_month, interval_prices
+        )
+        md = format_summary_markdown(self.region, self.summary_year, self.summary_month, rows, over_cap_ranges)
         path = summary_export_path(self.region, self.summary_year, self.summary_month)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w") as f:
@@ -596,6 +822,7 @@ class App:
             self.fetch_current(force=True)
             before = len(self.actual_data)
             self.actual_data = qph.sync_actual_data()
+            self.auto_fetch_actual(self.day)
             self.apply_actual_autofill()
             new = len(self.actual_data) - before
             self.status = f"Refreshed.{f' Imported {new} new actual intervals.' if new > 0 else ''}"
@@ -637,21 +864,36 @@ class App:
             pass
 
     def draw_chart(self, y: int, w: int) -> int:
-        """Draws the day's price sparkline at row y, returns next free row."""
+        """Draws the day's price sparkline at row y, returns next free row.
+        Buckets by actual clock time (minutes since midnight), not by
+        sequential position in self.day_rows - on an in-progress day (fewer
+        rows than a full 288-interval day), bucketing by sequential index
+        would stretch however little data exists across the *entire* chart
+        width, making a handful of morning hours look like a complete day
+        ending at 24:00. Bucketing by real time instead leaves the
+        not-yet-happened portion of the day blank, and the 00:00-24:00 axis
+        labels (based on the fixed chart width, not on how much data
+        exists) stay honest about where "now" actually falls."""
         if not self.day_rows:
             self.safe_addstr(y, 0, "(no price data for this day yet)")
             return y + 2
 
-        width = max(min(w - 2, len(self.day_rows)), 1)
-        buckets = chunk(self.day_rows, width)
+        width = max(w - 2, 1)
+        minutes_per_day = 24 * 60
+        buckets: list[list[tuple[str, float]]] = [[] for _ in range(width)]
+        for ts, price in self.day_rows:
+            minutes = int(ts[11:13]) * 60 + int(ts[14:16])
+            x = min(width - 1, minutes * width // minutes_per_day)
+            buckets[x].append((ts, price))
+
         day_prices = [p / 1000.0 for _, p in self.day_rows]
         day_avg = sum(day_prices) / len(day_prices)
         lo, hi = min(day_prices), max(day_prices)
         spread = (hi - lo) or 1.0
 
-        line = []
-        attrs = []
-        for b in buckets:
+        for x, b in enumerate(buckets):
+            if not b:
+                continue
             avg = sum(p / 1000.0 for _, p in b) / len(b)
             level = min(len(SPARK) - 1, max(0, round((avg - lo) / spread * (len(SPARK) - 1))))
             spike = avg > day_avg * 1.5
@@ -659,13 +901,7 @@ class App:
             attr = curses.color_pair(2) if spike else curses.color_pair(1)
             if selected:
                 attr |= curses.A_REVERSE
-            line.append(SPARK[level])
-            attrs.append(attr)
-
-        x = 0
-        for ch, attr in zip(line, attrs):
-            self.safe_addstr(y, x, ch, attr)
-            x += 1
+            self.safe_addstr(y, x, SPARK[level], attr)
 
         # axis labels roughly under 00:00 / 06:00 / 12:00 / 18:00 / 24:00
         for frac, label in ((0.0, "00:00"), (0.25, "06:00"), (0.5, "12:00"), (0.75, "18:00"), (1.0, "24:00")):
@@ -674,77 +910,210 @@ class App:
         return y + 3
 
     def draw_hour_table(self, y: int, w: int) -> int:
-        """Draws a 4-column table of per-hour averages at row y, returns next free row."""
+        """Draws a one-row-per-hour table (Hour / Avg spot / Usage / Cost) at
+        row y, returns next free row. Deliberately vertical (24 rows) rather
+        than the old compact multi-column grid - easier to read than cramming
+        avg+usage+cost into a small cell. Hours covered by imported actual
+        data show real usage/cost (self.hour_stats' "usage"/"charge"/
+        "covered" - see fetch_current()) alongside the AEMO spot-price
+        average; hours without an import show spot-price-average only, with
+        "--" for usage/cost. A trailing "~" on a value marks partial hour
+        coverage (<12 of the hour's 5-min intervals present)."""
         if not self.hour_stats:
-            return y
+            self.safe_addstr(y, 0, "(no hourly data for this day yet)")
+            return y + 1
 
         day_vals = [p / 1000.0 for _, p in self.day_rows] if self.day_rows else []
         day_avg = sum(day_vals) / len(day_vals) if day_vals else 0.0
 
-        cols = 4 if w >= 76 else (2 if w >= 40 else 1)
-        rows = -(-24 // cols)  # ceil
-        col_w = min(w // cols, 20) if cols else w
+        col = "{:<13}{:>16}{:>13}{:>10}"
+        self.safe_addstr(y, 0, col.format("Hour", "Avg spot ($/kWh)", "Usage (kWh)", "Cost ($)"), curses.A_BOLD)
+        y += 1
+        rule = "-" * min(w - 1, 52)
+        self.safe_addstr(y, 0, rule)
+        y += 1
 
+        max_y = self.stdscr.getmaxyx()[0] - 1
         for h in range(24):
-            row, col = h % rows, h // rows
+            if y >= max_y:
+                self.safe_addstr(y, 0, f"... {24 - h} more hour(s) not shown (resize taller to see all)", curses.A_DIM)
+                return y + 1
+            label = f"{h:02d}:00-{(h + 1) % 24:02d}:00"
             stats = self.hour_stats.get(h)
             if stats is None:
-                cell = f"{h:02d}  --"
-                attr = curses.A_DIM
+                self.safe_addstr(y, 0, col.format(label, "--", "--", "--"), curses.A_DIM)
+                y += 1
+                continue
+            avg = stats.get("avg")
+            usage, charge, covered = stats.get("usage"), stats.get("charge"), stats.get("covered")
+            avg_s = f"${avg:.4f}{'~' if stats.get('n', 0) < 12 else ''}" if avg is not None else "--"
+            if usage is not None:
+                mark = "~" if covered < 12 else ""
+                usage_s, cost_s = f"{usage:.2f}{mark}", f"${charge:.2f}"
             else:
-                incomplete = "~" if stats["n"] < 12 else " "
-                cell = f"{h:02d} ${stats['avg']:.4f}{incomplete}"
-                spike = day_avg and stats["avg"] > day_avg * 1.5
-                attr = curses.color_pair(2) if spike else 0
+                usage_s = cost_s = "--"
+            spike = day_avg and avg is not None and avg > day_avg * 1.5
+            attr = curses.color_pair(2) if spike else 0
             if self.hour == h:
                 attr |= curses.A_REVERSE | curses.A_BOLD
-            self.safe_addstr(y + row, col * col_w, cell.ljust(col_w - 1), attr)
-        return y + rows + 1
-
-    def draw_actual(self, y: int, cost: float | None) -> int:
-        """If imported actual data covers any part of the current window,
-        draws its exact usage/charge (no flat-load modelling - this is the
-        retailer's own already-computed per-interval Wholesale Usage
-        Charge) plus the network charge (computed exactly per interval from
-        the real data, no Peak/Off-peak entry needed) plus fixed charges for
-        a total. Controlled load is NOT added separately: T&Cs paragraph 5
-        defines the billed usage as including "any controlled load, if
-        applicable", and this export's Usage figure already reflects that -
-        confirmed empirically (adding a flat controlled-load charge on top
-        overshot two real bills by ~$0.52; without it they're within ~1.5%,
-        i.e. rounding). Returns the next free row."""
-        if not self.window_rows:
-            return y
-        stamps = [ts for ts, _ in self.window_rows]
-        usage, charge, covered = self.actual_totals(stamps)
-        if covered == 0:
-            return y
-
-        hours = len(self.window_rows) * (5 / 60)
-        stamped_usage = [(ts, self.actual_data[ts][0]) for ts in stamps if ts in self.actual_data]
-        net_charge = qph.actual_network_charge(stamped_usage, PLAN)
-        core_fixed_per_day = PLAN.daily_charge + PLAN.membership_fee + (PLAN.cap_demand_kw * PLAN.cap_fee_per_kw_day)
-        fixed = core_fixed_per_day * hours / 24
-        total = fixed + charge + net_charge
-
-        coverage = "full" if covered == len(stamps) else f"{covered}/{len(stamps)} intervals"
-        self.safe_addstr(y, 0, f"Actual (imported, {coverage}):", curses.color_pair(4))
-        y += 1
-        self.safe_addstr(y, 0, f"  {usage:.4f} kWh, exact energy charge ${charge:.2f} + network ${net_charge:.2f} + fixed ${fixed:.2f}")
-        y += 1
-        self.safe_addstr(y, 0, f"  -> actual total: ${total:.2f}", curses.color_pair(4) | curses.A_BOLD)
-        y += 1
-        if cost is not None:
-            diff = cost - total
-            word = "over" if diff >= 0 else "under"
-            self.safe_addstr(y, 0, f"  billed ${cost:.2f} is {word} the actual total by ${abs(diff):.2f}", curses.color_pair(3))
+            self.safe_addstr(y, 0, col.format(label, avg_s, usage_s, cost_s), attr)
             y += 1
-        return y + 1
+        return y
+
+    def draw_usage_cost(self, y: int, w: int) -> tuple[int, float | None]:
+        """Actual (imported) vs manual estimate, side by side as an aligned
+        table - replaces the old free-text lines (a prose "draw_actual()"
+        block plus a separate inline manual-entry block), which were hard
+        to scan/compare. "-" marks a value that isn't available (no import
+        coverage for Actual, or the u/c manual fields still unset for
+        Estimate).
+
+        Actual's usage/energy charge is the retailer's own already-computed
+        per-interval Wholesale Usage Charge (no flat-load modelling), plus
+        the network charge computed exactly per interval from the real data
+        (qph.actual_network_charge()). Controlled load is NOT added
+        separately: T&Cs paragraph 5 defines the billed usage as including
+        "any controlled load, if applicable", and this export's Usage
+        figure already reflects that - confirmed empirically (adding a
+        flat controlled-load charge on top overshot two real bills by
+        ~$0.52; without it they're within ~1.5%, i.e. rounding).
+
+        The Estimate column's Network charge and Avg draw are themselves
+        estimates, not real data - qph.estimated_network_charge() and the
+        avg-draw figure both assume the Estimate's usage is spread evenly
+        across the window (the same flat-load assumption qph.estimate_cost()
+        already uses for the wholesale energy charge), marked with "~" to
+        flag that. Less trustworthy than Actual's whenever real usage isn't
+        actually flat (e.g. a controlled-load spike concentrated in one TOU
+        period) - Actual is the reliable figure whenever it's available.
+
+        If nothing's been typed into the manual Usage field yet but Actual
+        has *some* coverage (typically an in-progress "today", which
+        apply_actual_autofill() deliberately won't autofill until the whole
+        window is covered - see its docstring, and the bug that motivated
+        that guard), the Estimate column falls back to using that partial
+        actual usage as its basis instead of sitting entirely blank -
+        marked with "*". This never touches self.fields.usage itself (so
+        pressing s to save still only saves what was actually typed, not a
+        partial-day figure masquerading as a final one) - it's display-only.
+
+        Returns (next free row, e_total) - e_total (the manual estimate's
+        total, or None if there's no usage to derive one from) is handed
+        back so draw_detail() can reuse it for the whole-day scaling
+        section below, without re-running qph.estimate_cost() a second
+        time."""
+        if not self.window_rows:
+            return y, None
+
+        cost = parse_float(self.fields.cost)
+        stamps = [ts for ts, _ in self.window_rows]
+        a_usage, a_energy, covered = self.actual_totals(stamps)
+        have_actual = covered > 0
+
+        values = [p / 1000.0 for _, p in self.window_rows]
+        hours = len(self.window_rows) * (5 / 60)
+
+        a_avg = a_network = a_fixed = a_total = None
+        if have_actual:
+            stamped_usage = [(ts, self.actual_data[ts][0]) for ts in stamps if ts in self.actual_data]
+            a_network = qph.actual_network_charge(stamped_usage, PLAN)
+            core_fixed_per_day = PLAN.daily_charge + PLAN.membership_fee + (PLAN.cap_demand_kw * PLAN.cap_fee_per_kw_day)
+            a_fixed = core_fixed_per_day * hours / 24
+            a_total = a_fixed + a_energy + a_network
+            a_avg = a_usage / covered
+
+        e_usage = parse_float(self.fields.usage)
+        e_from_actual = e_usage is None and have_actual
+        e_usage_basis = a_usage if e_from_actual else e_usage
+        e_fixed = e_energy = e_network = e_total = e_avg = None
+        if e_usage_basis is not None:
+            _e_total, e_fixed, e_energy, _capped = qph.estimate_cost(values, e_usage_basis, PLAN, CAP, hours)
+            e_network = qph.estimated_network_charge(stamps, e_usage_basis, PLAN)
+            e_total = e_fixed + e_energy + e_network
+            e_avg = e_usage_basis / len(stamps) if stamps else None
+
+        label_w, col_w = 22, 16
+
+        def cell(v: float | None, fmt: str = "${:.2f}", suffix: str = "") -> str:
+            return "-" if v is None else fmt.format(v) + suffix
+
+        def row(
+            label: str, a: float | None, e: float | None, fmt: str = "${:.2f}",
+            a_suffix: str = "", e_suffix: str = "",
+        ) -> str:
+            return f"{label:<{label_w}}{cell(a, fmt, a_suffix):>{col_w}}{cell(e, fmt, e_suffix):>{col_w}}"
+
+        if have_actual and covered != len(stamps):
+            self.safe_addstr(y, 0, f"(Actual data covers {covered}/{len(stamps)} intervals for this window)", curses.A_DIM)
+            y += 1
+        header = f"{'':<{label_w}}{'Actual':>{col_w}}{'Estimate':>{col_w}}"
+        self.safe_addstr(y, 0, header, curses.A_BOLD)
+        y += 1
+        rule = "-" * min(w - 1, label_w + col_w * 2)
+        self.safe_addstr(y, 0, rule)
+        y += 1
+
+        self.safe_addstr(
+            y, 0,
+            row(
+                "Usage (kWh) [u]", a_usage if have_actual else None, e_usage_basis, "{:.3f}",
+                e_suffix="*" if e_from_actual else "",
+            ),
+        )
+        y += 1
+        self.safe_addstr(
+            y, 0, row("Avg draw (kWh/5min)", a_avg, e_avg, "{:.4f}", e_suffix="~" if e_avg is not None else "")
+        )
+        y += 1
+        self.safe_addstr(y, 0, row("Fixed charge", a_fixed, e_fixed))
+        y += 1
+        self.safe_addstr(y, 0, row("Energy charge", a_energy if have_actual else None, e_energy))
+        y += 1
+        self.safe_addstr(
+            y, 0, row("Network charge", a_network, e_network, e_suffix="~" if e_network is not None else "")
+        )
+        y += 1
+        self.safe_addstr(y, 0, rule)
+        y += 1
+        self.safe_addstr(y, 0, row("Total", a_total, e_total), curses.A_BOLD)
+        y += 1
+
+        if cost is not None and (a_total is not None or e_total is not None):
+            a_diff = cost - a_total if a_total is not None else None
+            e_diff = cost - e_total if e_total is not None else None
+            self.safe_addstr(
+                y, 0, row(f"vs billed [c] ${cost:.2f}", a_diff, e_diff, "{:+.2f}"), curses.color_pair(3)
+            )
+            y += 1
+        if e_avg is not None or e_network is not None:
+            self.safe_addstr(
+                y, 0, "  ~ = estimate assumes usage spread evenly across the window", curses.A_DIM
+            )
+            y += 1
+        if e_from_actual:
+            self.safe_addstr(
+                y, 0,
+                "  * Estimate uses partial actual usage so far (not saved) - press u to enter your own",
+                curses.A_DIM,
+            )
+            y += 1
+        if e_usage_basis is None and not have_actual:
+            self.safe_addstr(y, 0, "No data yet - press u to enter usage manually.", curses.A_DIM)
+            y += 1
+        return y + 1, e_total
 
     def draw_summary(self) -> None:
         h, w = self.stdscr.getmaxyx()
+        price_rows = self.cache.get((self.region, self.summary_year, self.summary_month))
+        interval_prices = interval_prices_from_rows(price_rows) if price_rows is not None else None
+        interval_stats = day_interval_stats(
+            self.actual_data, self.summary_year, self.summary_month, interval_prices
+        )
         rows = month_summary_rows(
-            self.history, self.region, self.summary_year, self.summary_month, self.summary_day_avg
+            self.history, self.region, self.summary_year, self.summary_month, interval_stats
+        )
+        over_cap_ranges = month_over_cap_ranges(
+            self.actual_data, self.summary_year, self.summary_month, interval_prices
         )
         month_label = date(self.summary_year, self.summary_month, 1).strftime("%B %Y")
         header = f" {self.region}  {month_label}  [MONTH SUMMARY] "
@@ -755,27 +1124,33 @@ class App:
             self.safe_addstr(y, 0, self.summary_fetch_error, curses.color_pair(2))
             y += 1
 
-        col = "{:<12}{:>14}{:>12}{:>15}{:>17}"
-        rule = "-" * min(w - 1, 70)
+        col = "{:<12}{:>13}{:>13}{:>10}{:>13}"
+        rule = "-" * min(w - 1, 63)
         if not rows:
             self.safe_addstr(y, 0, "No saved days this month.", curses.A_DIM)
         else:
             self.safe_addstr(
-                y, 0, col.format("Date", "Usage (kWh)", "Cost ($)", "Rate ($/kWh)", "Day avg spot"), curses.A_BOLD
+                y, 0,
+                col.format("Date", "Usage (kWh)", "Avg 5m (kWh)", "Cost ($)", "Rate ($/kWh)"),
+                curses.A_BOLD,
             )
             y += 1
             self.safe_addstr(y, 0, rule)
             y += 1
 
-            max_rows = max(h - 11 - y, 0)  # leave room for the totals row, footnote, status and help lines
+            max_rows = max(h - 12 - y, 0)  # leave room for the totals row, footnote, status and help lines
             shown = rows[:max_rows]
             for r in shown:
-                usage, cost, avg = r["usage"], r["cost"], r["avg"]
+                usage, cost = r["usage"], r["cost"]
+                interval_avg_val = r.get("interval_avg")
                 usage_s = f"{usage:.3f}" if usage is not None else "-"
+                interval_avg_s = f"{interval_avg_val:.4f}" if interval_avg_val is not None else "-"
                 cost_s = f"{cost:.2f}" if cost is not None else "-"
                 rate_s = f"{cost / usage:.4f}" if usage and cost is not None else "-"
-                avg_s = f"${avg:.4f}" if avg is not None else "-"
-                self.safe_addstr(y, 0, col.format(r["date"].strftime("%a %d %b"), usage_s, cost_s, rate_s, avg_s))
+                self.safe_addstr(
+                    y, 0,
+                    col.format(r["date"].strftime("%a %d %b"), usage_s, interval_avg_s, cost_s, rate_s),
+                )
                 y += 1
             if len(rows) > len(shown):
                 self.safe_addstr(y, 0, f"... and {len(rows) - len(shown)} more day(s) not shown (export to see all)", curses.A_DIM)
@@ -785,31 +1160,71 @@ class App:
             total_cost = sum(r["cost"] for r in rows if r["cost"] is not None)
             any_usage = any(r["usage"] is not None for r in rows)
             any_cost = any(r["cost"] is not None for r in rows)
-            avgs = [r["avg"] for r in rows if r["avg"] is not None]
+            interval_avgs = [r["interval_avg"] for r in rows if r.get("interval_avg") is not None]
             total_usage_s = f"{total_usage:.3f}" if any_usage else "-"
             total_cost_s = f"{total_cost:.2f}" if any_cost else "-"
             total_rate_s = f"{total_cost / total_usage:.4f}" if any_usage and any_cost and total_usage else "-"
-            month_avg_s = f"${sum(avgs) / len(avgs):.4f}" if avgs else "-"
+            month_interval_avg_s = f"{sum(interval_avgs) / len(interval_avgs):.4f}" if interval_avgs else "-"
+            over_cap_days = [r for r in rows if r.get("interval_over_cap")]
             self.safe_addstr(y, 0, rule)
             y += 1
             self.safe_addstr(
-                y, 0, col.format("Total", total_usage_s, total_cost_s, total_rate_s, month_avg_s), curses.A_BOLD
+                y, 0,
+                col.format("Total", total_usage_s, month_interval_avg_s, total_cost_s, total_rate_s),
+                curses.A_BOLD,
             )
             y += 2
 
             p = PLAN
             fixed_daily = p.daily_charge + p.membership_fee + (p.cap_demand_kw * p.cap_fee_per_kw_day)
-            footnote = [
-                f"Fixed ${fixed_daily:.3f}/day (daily + membership + cap fee)",
-                f"Network: peak ${p.peak_network_rate:.4f}/kWh, off-peak ${p.offpeak_network_rate:.4f}/kWh,",
-                f"         shoulder ${p.shoulder_network_rate:.4f}/kWh",
-                "Cost is billed, not derived from these - full breakdown in export (e)",
-            ]
-            for line in footnote:
-                if y >= h - 2:
-                    break
-                self.safe_addstr(y, 0, line, curses.A_DIM)
-                y += 1
+            cap_kwh = p.cap_demand_kw / 12
+
+            self.safe_addstr(y, 0, "Plan rates", curses.A_BOLD)
+            y += 1
+            self.safe_addstr(
+                y, 0,
+                f"  fixed ${fixed_daily:.3f}/day   peak ${p.peak_network_rate:.4f}/kWh   "
+                f"off-peak ${p.offpeak_network_rate:.4f}/kWh   shoulder ${p.shoulder_network_rate:.4f}/kWh",
+                curses.A_DIM,
+            )
+            y += 2
+
+            self.safe_addstr(y, 0, "Cap watch", curses.A_BOLD)
+            y += 1
+            cap_line = (
+                f"⚠ {len(over_cap_days)} day(s) lost cap protection (>{cap_kwh:.4f} kWh/5min *and* AEMO price spiked)"
+                if over_cap_days
+                else f"No day lost the {p.cap_demand_kw:.1f}kW demand cap's protection this month (AEMO-confirmed)"
+            )
+            self.safe_addstr(y, 0, f"  {cap_line}", curses.color_pair(2) if over_cap_days else curses.A_DIM)
+            y += 1
+            recurring = [r for r in over_cap_ranges if r[2] >= 2]
+            if over_cap_days:
+                if recurring:
+                    top_start, top_end, top_days, top_total = recurring[0]
+                    top_window = top_start if top_start == top_end else f"{top_start}-{top_end}"
+                    self.safe_addstr(
+                        y, 0,
+                        f"  most common: {top_window} on {top_days} day(s) ({top_total}x) - see export for full list",
+                        curses.A_DIM,
+                    )
+                    y += 1
+                    self.safe_addstr(
+                        y, 0,
+                        "  same time + steady kWh daily -> likely a timer/thermostat load (hot water?)",
+                        curses.A_DIM,
+                    )
+                    y += 1
+                else:
+                    self.safe_addstr(
+                        y, 0, "  no clock-time window lost cap protection on more than one day (each a one-off)",
+                        curses.A_DIM,
+                    )
+                    y += 1
+            y += 1
+
+            self.safe_addstr(y, 0, "Cost is billed, not derived from these figures - full breakdown in export (e)", curses.A_DIM)
+            y += 1
 
         status_line = self.status
         if status_line:
@@ -831,6 +1246,21 @@ class App:
             self.safe_addstr(1, 0, "● saved", curses.color_pair(4))
 
         y = 3
+        if self.actual_fetch_error:
+            wrap_width = max(w - 1, 20)
+            wrapped: list[tuple[str, int]] = []
+            for i, line in enumerate(self.actual_fetch_error):
+                style = curses.color_pair(2) | curses.A_BOLD if i == 0 else curses.A_DIM
+                for wline in textwrap.wrap(line, wrap_width) or [""]:
+                    wrapped.append((wline, style))
+            max_lines = 10
+            for wline, style in wrapped[:max_lines]:
+                self.safe_addstr(y, 0, wline, style)
+                y += 1
+            if len(wrapped) > max_lines:
+                self.safe_addstr(y, 0, f"... ({len(wrapped) - max_lines} more line(s))", curses.A_DIM)
+                y += 1
+            y += 1
         if self.error:
             self.safe_addstr(y, 0, self.error, curses.color_pair(2) | curses.A_BOLD)
             y += 2
@@ -858,35 +1288,13 @@ class App:
         y = self.draw_chart(y + 1, w)
         y += 1
 
-        self.safe_addstr(y, 0, "Hourly averages ($/kWh; ~ = partial hour, e.g. today or a month boundary):", curses.A_DIM)
+        self.safe_addstr(y, 0, "Hourly breakdown (red = spot >1.5x day avg; ~ = partial hour):", curses.A_DIM)
         y = self.draw_hour_table(y + 1, w)
         y += 1
 
-        cost = parse_float(self.fields.cost)
-        y = self.draw_actual(y, cost)
+        y, total = self.draw_usage_cost(y, w)
 
         if self.window_rows:
-            self.safe_addstr(y, 0, "Manual entry (only needed to check a day/hour without imported data):", curses.A_DIM)
-            y += 1
-            values = [p / 1000.0 for _, p in self.window_rows]
-            hours = len(self.window_rows) * (5 / 60)
-            usage = parse_float(self.fields.usage)
-            self.safe_addstr(y, 0, f"Usage [u]: {self.fields.usage or '(unset)':>10} kWh    Cost [c]: {self.fields.cost or '(unset)':>10} $")
-            y += 1
-            total = None
-            if usage is not None:
-                total, fixed, variable, capped = qph.estimate_cost(values, usage, PLAN, CAP, hours)
-                self.safe_addstr(y, 0, f"  estimate: fixed ${fixed:.2f} + energy ${variable:.2f}" + (f"  ({capped} capped)" if capped else ""))
-                y += 1
-                self.safe_addstr(y, 0, f"  -> estimated total (incl. {PLAN.gst_rate*100:.0f}% GST): ${total:.2f}", curses.A_BOLD)
-                y += 1
-                if cost is not None:
-                    diff = cost - total
-                    word = "over" if diff >= 0 else "under"
-                    self.safe_addstr(y, 0, f"  actual ${cost:.2f} is {word} the estimate by ${abs(diff):.2f}", curses.color_pair(3))
-                    y += 1
-            y += 1
-
             if self.hour is not None:
                 self.safe_addstr(
                     y, 0,
@@ -905,6 +1313,7 @@ class App:
                     if day_cost is not None:
                         self.safe_addstr(y, 0, f"  scaled to actual daily bill ${day_cost:.2f}: this window ≈ ${share*day_cost:.2f}", curses.A_BOLD)
                         y += 1
+            y += 1
 
         status_line = self.status
         if status_line:

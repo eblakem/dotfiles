@@ -76,6 +76,14 @@ PLAN = qp.Plan(
 )
 CAP = qp.DEFAULT_CAP
 
+# WholeSave's Billing Period is a fixed 28 days (Welcome Pack para 5), not a
+# calendar month, and doesn't reset to a fixed day-of-month - it rolls
+# forward in exact 28-day blocks from when the plan took effect. Anchored at
+# the WholeSave plan's start date (Welcome Pack: "should take effect from 05
+# Aug 2026"); the account's first cycle (05 Aug - 01 Sep 2026) confirms it.
+BILLING_CYCLE_ANCHOR = date(2026, 8, 5)
+BILLING_CYCLE_DAYS = 28
+
 
 # ---- pure helpers (no curses) -----------------------------------------
 
@@ -253,12 +261,51 @@ def month_summary_rows(
     return rows
 
 
+def billing_cycle_containing(d: date) -> tuple[date, date]:
+    """The (start, end) dates (inclusive) of the BILLING_CYCLE_DAYS-day
+    billing cycle that contains `d`, per BILLING_CYCLE_ANCHOR - rolls
+    forward in fixed-length blocks with no calendar alignment, so it drifts
+    through the month over successive cycles (unlike a calendar month)."""
+    cycle_index = (d - BILLING_CYCLE_ANCHOR).days // BILLING_CYCLE_DAYS
+    start = BILLING_CYCLE_ANCHOR + timedelta(days=cycle_index * BILLING_CYCLE_DAYS)
+    end = start + timedelta(days=BILLING_CYCLE_DAYS - 1)
+    return start, end
+
+
+def predicted_cycle_cost(
+    history: dict, region: str
+) -> tuple[float, int, int, date, date] | None:
+    """Run-rate projection for the *current* billing cycle (see
+    billing_cycle_containing) - not the calendar month, since WholeSave's
+    28-day Billing Period doesn't align to one and can span two calendar
+    months. Averages billed cost across whichever days in the current cycle
+    already have a saved cost, extrapolated across the full cycle length.
+    Returns (predicted_total, days_with_cost, cycle_days, cycle_start,
+    cycle_end), or None if no day in the current cycle has a saved cost
+    yet."""
+    start, end = billing_cycle_containing(date.today())
+    region_entry = history.get(region, {})
+    costs = []
+    d = start
+    while d <= end:
+        cost = region_entry.get(d.isoformat(), {}).get("day", {}).get("cost")
+        if cost is not None:
+            costs.append(cost)
+        d += timedelta(days=1)
+    if not costs:
+        return None
+    cycle_days = (end - start).days + 1
+    predicted_total = (sum(costs) / len(costs)) * cycle_days
+    return predicted_total, len(costs), cycle_days, start, end
+
+
 def format_summary_markdown(
     region: str,
     year: int,
     month: int,
     rows: list[dict],
     over_cap_ranges: list[tuple[str, str, int, int]] | None = None,
+    history: dict | None = None,
 ) -> str:
     month_label = date(year, month, 1).strftime("%B %Y")
     cap_kwh = PLAN.cap_demand_kw / 12
@@ -302,6 +349,18 @@ def format_summary_markdown(
         lines.append("")
         lines.append("_No saved days this month._")
     lines.append("")
+    predicted = predicted_cycle_cost(history, region) if history is not None else None
+    if predicted is not None:
+        predicted_total, days_with_cost, cycle_days, cyc_start, cyc_end = predicted
+        if (cyc_start.year, cyc_start.month) == (year, month) or (cyc_end.year, cyc_end.month) == (year, month):
+            avg_cost = predicted_total / cycle_days
+            cyc_label = f"{cyc_start.strftime('%d %b')} - {cyc_end.strftime('%d %b')}"
+            lines.append(
+                f"**Billing cycle ({cyc_label}, {cycle_days} days):** predicted total ${predicted_total:.2f} "
+                f"(${avg_cost:.2f}/day avg across {days_with_cost} saved day(s) so far - WholeSave's Billing "
+                "Period is a fixed 28 days, not a calendar month)"
+            )
+            lines.append("")
     if cap_watch:
         lines.append(
             f"**⚠️ Cap watch:** {PLAN.cap_demand_kw:.1f}kW demand cap = {cap_kwh:.4f} kWh/5-min interval. "
@@ -729,7 +788,9 @@ class App:
         over_cap_ranges = month_over_cap_ranges(
             self.actual_data, self.summary_year, self.summary_month, interval_prices
         )
-        md = format_summary_markdown(self.region, self.summary_year, self.summary_month, rows, over_cap_ranges)
+        md = format_summary_markdown(
+            self.region, self.summary_year, self.summary_month, rows, over_cap_ranges, self.history
+        )
         path = summary_export_path(self.region, self.summary_year, self.summary_month)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w") as f:
@@ -1138,7 +1199,7 @@ class App:
             self.safe_addstr(y, 0, rule)
             y += 1
 
-            max_rows = max(h - 12 - y, 0)  # leave room for the totals row, footnote, status and help lines
+            max_rows = max(h - 14 - y, 0)  # leave room for the totals/predicted rows, footnote, status and help lines
             shown = rows[:max_rows]
             for r in shown:
                 usage, cost = r["usage"], r["cost"]
@@ -1188,6 +1249,25 @@ class App:
                 curses.A_DIM,
             )
             y += 2
+
+            predicted = predicted_cycle_cost(self.history, self.region)
+            show_predicted = predicted is not None and (
+                (predicted[3].year, predicted[3].month) == (self.summary_year, self.summary_month)
+                or (predicted[4].year, predicted[4].month) == (self.summary_year, self.summary_month)
+            )
+            if show_predicted:
+                predicted_total, days_with_cost, cycle_days, cyc_start, cyc_end = predicted
+                avg_cost = predicted_total / cycle_days
+                cyc_label = f"{cyc_start.strftime('%d %b')}-{cyc_end.strftime('%d %b')}"
+                self.safe_addstr(y, 0, f"Billing cycle ({cyc_label}, {cycle_days} days)", curses.A_BOLD)
+                y += 1
+                self.safe_addstr(
+                    y, 0,
+                    f"  predicted total ${predicted_total:.2f}  (${avg_cost:.2f}/day avg x "
+                    f"{days_with_cost} saved day(s) so far)",
+                    curses.A_DIM,
+                )
+                y += 2
 
             self.safe_addstr(y, 0, "Cap watch", curses.A_BOLD)
             y += 1

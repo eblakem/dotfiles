@@ -242,41 +242,53 @@ def hours_prices(day: date, hours: range | list[int], lookup: dict[str, float]) 
     return rows
 
 
-def actual_network_charge(stamped_usage: list[tuple[str, float]], plan: qp.Plan) -> float:
+def interval_hour(ts: str) -> int:
+    """Which clock hour (0-23) a 5-min interval timestamp belongs to, using
+    the same end-of-interval convention as hour_window(): an interval
+    timestamped HH:00 belongs to hour HH-1, not HH."""
+    hh, mm = int(ts[11:13]), int(ts[14:16])
+    return (hh - 1) % 24 if mm == 0 else hh
+
+
+def actual_network_charge_by_period(stamped_usage: list[tuple[str, float]], plan: qp.Plan) -> dict[str, float]:
     """Exact network charge for real per-interval (timestamp, usage_kwh)
-    pairs (as found in the imported actual-data cache), classifying each
-    interval's TOU period from its own clock hour using the same
-    end-of-interval convention as hour_window() (an interval timestamped
-    HH:00 belongs to hour HH-1, not HH)."""
-    total = 0.0
+    pairs (as found in the imported actual-data cache), split by TOU meter
+    - peak/off-peak/shoulder (see qp.tou_period_for_hour()) - each interval
+    classified from its own clock hour via interval_hour()."""
+    totals = {"peak": 0.0, "offpeak": 0.0, "shoulder": 0.0}
     for ts, usage in stamped_usage:
-        hh, mm = int(ts[11:13]), int(ts[14:16])
-        hour = (hh - 1) % 24 if mm == 0 else hh
-        total += usage * qp.network_rate_for_period(qp.tou_period_for_hour(hour), plan)
-    return total
+        period = qp.tou_period_for_hour(interval_hour(ts))
+        totals[period] += usage * qp.network_rate_for_period(period, plan)
+    return totals
+
+
+def actual_network_charge(stamped_usage: list[tuple[str, float]], plan: qp.Plan) -> float:
+    """Total across all three TOU meters - see actual_network_charge_by_period()."""
+    return sum(actual_network_charge_by_period(stamped_usage, plan).values())
+
+
+def estimated_network_charge_by_period(stamps: list[str], usage_kwh: float, plan: qp.Plan) -> dict[str, float]:
+    """Estimated network charge for `usage_kwh` spread evenly across
+    `stamps` - the same flat-load assumption estimate_cost() already uses
+    for the wholesale energy charge, just extended to cover network too -
+    split by TOU meter, same as actual_network_charge_by_period(). Less
+    trustworthy than the actual variant whenever usage isn't actually flat
+    across the window (e.g. a controlled-load spike concentrated in one TOU
+    period)."""
+    n = len(stamps)
+    totals = {"peak": 0.0, "offpeak": 0.0, "shoulder": 0.0}
+    if n == 0:
+        return totals
+    flat_usage = usage_kwh / n
+    for ts in stamps:
+        period = qp.tou_period_for_hour(interval_hour(ts))
+        totals[period] += flat_usage * qp.network_rate_for_period(period, plan)
+    return totals
 
 
 def estimated_network_charge(stamps: list[str], usage_kwh: float, plan: qp.Plan) -> float:
-    """Estimated network charge for `usage_kwh` spread evenly across
-    `stamps` - the same flat-load assumption estimate_cost() already uses
-    for the wholesale energy charge, just extended to cover network too.
-    Classifies each interval's TOU period the same way as
-    actual_network_charge(), just working from an assumed flat per-interval
-    usage instead of real per-interval usage (which isn't available when
-    there's no import to work from - that's the whole reason this estimate
-    exists). Less trustworthy than actual_network_charge() whenever usage
-    isn't actually flat across the window (e.g. a controlled-load spike
-    concentrated in one TOU period)."""
-    n = len(stamps)
-    if n == 0:
-        return 0.0
-    flat_usage = usage_kwh / n
-    total = 0.0
-    for ts in stamps:
-        hh, mm = int(ts[11:13]), int(ts[14:16])
-        hour = (hh - 1) % 24 if mm == 0 else hh
-        total += flat_usage * qp.network_rate_for_period(qp.tou_period_for_hour(hour), plan)
-    return total
+    """Total across all three TOU meters - see estimated_network_charge_by_period()."""
+    return sum(estimated_network_charge_by_period(stamps, usage_kwh, plan).values())
 
 
 def wholesale_usage_charge(

@@ -59,6 +59,12 @@ HISTORY_FILE = os.path.expanduser(
 
 SPARK = " ▁▂▃▄▅▆▇█"
 
+# curses color-pair numbers for the peak/off-peak/shoulder TOU meters (see
+# qp.tou_period_for_hour()) - initialized in App.run(), used by both
+# draw_hour_table() and draw_usage_cost() so a given meter reads as the
+# same color everywhere.
+TOU_COLOR_PAIR = {"peak": 5, "offpeak": 6, "shoulder": 7}
+
 PLAN = qp.Plan(
     cap_demand_kw=qp.DEFAULT_CAP_DEMAND_KW,
     cap_fee_per_kw_day=qp.DEFAULT_CAP_FEE_PER_KW_DAY,
@@ -977,7 +983,7 @@ class App:
         for frac, label in ((0.0, "00:00"), (0.25, "06:00"), (0.5, "12:00"), (0.75, "18:00"), (1.0, "24:00")):
             lx = min(int(frac * (width - 1)), max(width - len(label), 0))
             self.safe_addstr(y + 1, lx, label, curses.A_DIM)
-        return y + 3
+        return y + 2
 
     def draw_hour_table(self, y: int, w: int) -> int:
         """Draws a one-row-per-hour table (Hour / Avg spot / Usage / Cost) at
@@ -1009,9 +1015,10 @@ class App:
                 self.safe_addstr(y, 0, f"... {24 - h} more hour(s) not shown (resize taller to see all)", curses.A_DIM)
                 return y + 1
             label = f"{h:02d}:00-{(h + 1) % 24:02d}:00"
+            period_attr = curses.color_pair(TOU_COLOR_PAIR[qp.tou_period_for_hour(h)])
             stats = self.hour_stats.get(h)
             if stats is None:
-                self.safe_addstr(y, 0, col.format(label, "--", "--", "--"), curses.A_DIM)
+                self.safe_addstr(y, 0, col.format(label, "--", "--", "--"), period_attr | curses.A_DIM)
                 y += 1
                 continue
             avg = stats.get("avg")
@@ -1023,7 +1030,7 @@ class App:
             else:
                 usage_s = cost_s = "--"
             spike = day_avg and avg is not None and avg > day_avg * 1.5
-            attr = curses.color_pair(2) if spike else 0
+            attr = period_attr | (curses.A_BOLD if spike else 0)
             if self.hour == h:
                 attr |= curses.A_REVERSE | curses.A_BOLD
             self.safe_addstr(y, 0, col.format(label, avg_s, usage_s, cost_s), attr)
@@ -1041,21 +1048,25 @@ class App:
         Actual's usage/energy charge is the retailer's own already-computed
         per-interval Wholesale Usage Charge (no flat-load modelling), plus
         the network charge computed exactly per interval from the real data
-        (qph.actual_network_charge()). Controlled load is NOT added
-        separately: T&Cs paragraph 5 defines the billed usage as including
-        "any controlled load, if applicable", and this export's Usage
-        figure already reflects that - confirmed empirically (adding a
-        flat controlled-load charge on top overshot two real bills by
-        ~$0.52; without it they're within ~1.5%, i.e. rounding).
+        - shown as one row per TOU meter the window touches (peak/off-peak/
+        shoulder, qph.actual_network_charge_by_period() - colored to match
+        draw_hour_table()'s per-hour coloring), rather than a single lumped
+        figure. Controlled load is NOT added separately: T&Cs paragraph 5
+        defines the billed usage as including "any controlled load, if
+        applicable", and this export's Usage figure already reflects that -
+        confirmed empirically (adding a flat controlled-load charge on top
+        overshot two real bills by ~$0.52; without it they're within ~1.5%,
+        i.e. rounding).
 
-        The Estimate column's Network charge and Avg draw are themselves
-        estimates, not real data - qph.estimated_network_charge() and the
-        avg-draw figure both assume the Estimate's usage is spread evenly
-        across the window (the same flat-load assumption qph.estimate_cost()
-        already uses for the wholesale energy charge), marked with "~" to
-        flag that. Less trustworthy than Actual's whenever real usage isn't
-        actually flat (e.g. a controlled-load spike concentrated in one TOU
-        period) - Actual is the reliable figure whenever it's available.
+        The Estimate column's per-meter Network rows and Avg draw are
+        themselves estimates, not real data - qph.estimated_network_charge_
+        by_period() and the avg-draw figure both assume the Estimate's
+        usage is spread evenly across the window (the same flat-load
+        assumption qph.estimate_cost() already uses for the wholesale
+        energy charge), marked with "~" to flag that. Less trustworthy than
+        Actual's whenever real usage isn't actually flat (e.g. a
+        controlled-load spike concentrated in one TOU period) - Actual is
+        the reliable figure whenever it's available.
 
         If nothing's been typed into the manual Usage field yet but Actual
         has *some* coverage (typically an in-progress "today", which
@@ -1083,10 +1094,12 @@ class App:
         values = [p / 1000.0 for _, p in self.window_rows]
         hours = len(self.window_rows) * (5 / 60)
 
-        a_avg = a_network = a_fixed = a_total = None
+        a_avg = a_fixed = a_total = None
+        a_network_by_period: dict[str, float] = {}
         if have_actual:
             stamped_usage = [(ts, self.actual_data[ts][0]) for ts in stamps if ts in self.actual_data]
-            a_network = qph.actual_network_charge(stamped_usage, PLAN)
+            a_network_by_period = qph.actual_network_charge_by_period(stamped_usage, PLAN)
+            a_network = sum(a_network_by_period.values())
             core_fixed_per_day = PLAN.daily_charge + PLAN.membership_fee + (PLAN.cap_demand_kw * PLAN.cap_fee_per_kw_day)
             a_fixed = core_fixed_per_day * hours / 24
             a_total = a_fixed + a_energy + a_network
@@ -1096,13 +1109,25 @@ class App:
         e_from_actual = e_usage is None and have_actual
         e_usage_basis = a_usage if e_from_actual else e_usage
         e_fixed = e_energy = e_network = e_total = e_avg = None
+        e_network_by_period: dict[str, float] = {}
         if e_usage_basis is not None:
             _e_total, e_fixed, e_energy, _capped = qph.estimate_cost(values, e_usage_basis, PLAN, CAP, hours)
-            e_network = qph.estimated_network_charge(stamps, e_usage_basis, PLAN)
+            e_network_by_period = qph.estimated_network_charge_by_period(stamps, e_usage_basis, PLAN)
+            e_network = sum(e_network_by_period.values())
             e_total = e_fixed + e_energy + e_network
             e_avg = e_usage_basis / len(stamps) if stamps else None
 
-        label_w, col_w = 22, 16
+        # Which TOU meters this window actually touches, peak/off-peak/
+        # shoulder order - just one for a single-hour window, up to all
+        # three for the whole day (see qp.tou_period_for_hour()).
+        present_periods = {qp.tou_period_for_hour(qph.interval_hour(ts)) for ts in stamps}
+        periods_present = [p for p in ("peak", "offpeak", "shoulder") if p in present_periods]
+        period_label = {
+            p: f"{name} {qp.network_rate_for_period(p, PLAN):.4f}"
+            for p, name in (("peak", "peak"), ("offpeak", "off-peak"), ("shoulder", "shoulder"))
+        }
+
+        label_w, col_w = 26, 16
 
         def cell(v: float | None, fmt: str = "${:.2f}", suffix: str = "") -> str:
             return "-" if v is None else fmt.format(v) + suffix
@@ -1139,10 +1164,15 @@ class App:
         y += 1
         self.safe_addstr(y, 0, row("Energy charge", a_energy if have_actual else None, e_energy))
         y += 1
-        self.safe_addstr(
-            y, 0, row("Network charge", a_network, e_network, e_suffix="~" if e_network is not None else "")
-        )
-        y += 1
+        for period in periods_present:
+            a_val = a_network_by_period.get(period)
+            e_val = e_network_by_period.get(period)
+            self.safe_addstr(
+                y, 0,
+                row(f"Network ({period_label[period]})", a_val, e_val, e_suffix="~" if e_val is not None else ""),
+                curses.color_pair(TOU_COLOR_PAIR[period]),
+            )
+            y += 1
         self.safe_addstr(y, 0, rule)
         y += 1
         self.safe_addstr(y, 0, row("Total", a_total, e_total), curses.A_BOLD)
@@ -1377,8 +1407,7 @@ class App:
         y = self.draw_chart(y + 1, w)
         y += 1
 
-        self.safe_addstr(y, 0, "Hourly breakdown (red = spot >1.5x day avg; ~ = partial hour):", curses.A_DIM)
-        y = self.draw_hour_table(y + 1, w)
+        y = self.draw_hour_table(y, w)
         y += 1
 
         y, total = self.draw_usage_cost(y, w)
@@ -1430,6 +1459,9 @@ class App:
         curses.init_pair(2, curses.COLOR_RED, -1)
         curses.init_pair(3, curses.COLOR_YELLOW, -1)
         curses.init_pair(4, curses.COLOR_GREEN, -1)
+        curses.init_pair(TOU_COLOR_PAIR["peak"], curses.COLOR_RED, -1)
+        curses.init_pair(TOU_COLOR_PAIR["offpeak"], curses.COLOR_GREEN, -1)
+        curses.init_pair(TOU_COLOR_PAIR["shoulder"], curses.COLOR_BLUE, -1)
         self.stdscr.keypad(True)
         while True:
             self.draw()

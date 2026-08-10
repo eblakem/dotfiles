@@ -66,6 +66,28 @@ REAUTH_HELP = (
     f"5. Overwrite {COOKIE_FILE} with just that value (no quotes, no trailing newline needed)"
 )
 
+# qld_price_tui.py's auto_fetch_actual() runs unattended on every TUI launch
+# and only ever showed its result on-screen for that one session - so a
+# failure (e.g. GloBird not having published yesterday's data yet at
+# whatever hour the TUI happened to be opened) left no trace once the
+# terminal closed. Appended to on every auto-fetch attempt, success or
+# failure, so that's diagnosable after the fact instead of requiring a
+# manual re-run to guess at.
+LOG_FILE = os.path.expanduser(
+    os.environ.get("GLOBIRD_FETCH_LOG_FILE", os.path.join(qph.ACTUAL_DATA_DIR, "auto_fetch_log.txt"))
+)
+
+
+def log_attempt(message: str) -> None:
+    """Best-effort append of a timestamped line to LOG_FILE. Never raises -
+    a logging failure (e.g. disk full) shouldn't take down the caller."""
+    try:
+        os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+        with open(LOG_FILE, "a") as f:
+            f.write(f"{datetime.now():%Y-%m-%d %H:%M:%S} {message}\n")
+    except OSError:
+        pass
+
 
 def load_cookie() -> str:
     env_cookie = os.environ.get("GLOBIRD_SESSION_COOKIE")

@@ -553,11 +553,18 @@ class App:
         opens on yesterday by default and that's usually the day worth
         having fresh. Only attempted for days that have already finished
         (not today/future, where there's nothing to fetch yet). Any
-        failure - most commonly an expired session cookie - is recorded in
-        self.actual_fetch_error (a list of lines: a headline, then any
-        recovery steps the failure came with - e.g. qld_globird_fetch's
-        REAUTH_HELP) for draw_detail() to show in full, rather than raised
-        (a stale/missing cookie shouldn't crash the TUI)."""
+        failure - most commonly an expired session cookie, but also e.g. a
+        disk/permission error saving the export or merging it into the
+        actual-data cache - is recorded in self.actual_fetch_error (a list
+        of lines: a headline, then any recovery steps the failure came
+        with - e.g. qld_globird_fetch's REAUTH_HELP) for draw_detail() to
+        show in full, rather than raised (a stale/missing cookie or a
+        transient portal issue shouldn't crash the TUI). Every attempt,
+        success or failure, is also appended to qgf.LOG_FILE - the on-screen
+        error only lives as long as that terminal session, so without a
+        persistent log a failure that happens before you're watching (e.g.
+        auto-fetch running before GloBird has published yesterday's data
+        yet) is otherwise undiagnosable after the fact."""
         if day >= date.today():
             return
         prefix = day.strftime("%Y/%m/%d")
@@ -566,15 +573,17 @@ class App:
         try:
             cookie = qgf.load_cookie()
             data = qgf.fetch_csv(day, day, cookie)
+            qgf.save_export(data, day, day)
+            self.actual_data = qph.sync_actual_data()
         except (SystemExit, RuntimeError, urllib.error.URLError, TimeoutError, OSError) as exc:
             headline = f"GloBird auto-fetch for {day.strftime('%d-%m-%Y')} failed:"
             detail_lines = [line for line in str(exc).splitlines() if line.strip()]
             self.actual_fetch_error = [headline, *detail_lines]
+            qgf.log_attempt(f"FAILED {day.strftime('%d-%m-%Y')}: {exc}")
             return
-        qgf.save_export(data, day, day)
-        self.actual_data = qph.sync_actual_data()
         self.actual_fetch_error = []
         self.status = f"Auto-fetched {day.strftime('%d-%m-%Y')} from GloBird."
+        qgf.log_attempt(f"OK {day.strftime('%d-%m-%Y')}")
 
     @property
     def region(self) -> str:

@@ -544,6 +544,8 @@ class App:
         self.window_stamps: set[str] = set()
         self.lookup: dict[str, float] = {}
         self.hour_stats: dict[int, dict] = {}
+        self.hourly_profile: dict[int, float] = {}
+        self.hist_days = 0
         self.actual_data: dict[str, tuple[float, float]] = qph.sync_actual_data()
         self.actual_fetch_error: list[str] = []
         self.auto_fetch_actual(self.day)
@@ -616,6 +618,7 @@ class App:
             self.error = f"Fetch failed: {exc}"
             self.day_rows, self.window_rows, self.window_stamps = [], [], set()
             self.lookup, self.hour_stats = {}, {}
+            self.hourly_profile, self.hist_days = {}, 0
             return
 
         all_rows: list[tuple[str, float]] = []
@@ -633,6 +636,11 @@ class App:
             self.window_stamps = set()
             self.window_rows = self.day_rows
 
+        # Shared with draw_usage_cost()'s whole-day projection, computed once
+        # here rather than per-draw - see qph.historical_hourly_usage().
+        self.hourly_profile, self.hist_days = qph.historical_hourly_usage(self.actual_data, exclude_day=self.day)
+        enough_history = self.hist_days >= qph.MIN_HISTORY_DAYS_FOR_PROJECTION
+
         self.hour_stats = {}
         for h in range(24):
             _, _, stamps = qph.hour_window(self.day, h)
@@ -647,6 +655,19 @@ class App:
                 entry["usage"] = usage
                 entry["charge"] = charge
                 entry["covered"] = covered
+            if rows and covered < len(rows) and enough_history:
+                # This hour isn't fully covered by actual data yet (still in
+                # progress today, or simply never imported) - project the
+                # missing intervals from the historical hour-of-day shape and
+                # price the whole hour (real + projected) against its own
+                # spot prices, same model as the whole-day estimate.
+                row_stamps = [ts for ts, _ in rows]
+                projected, n_projected = qph.project_interval_usage(row_stamps, self.actual_data, self.hourly_profile)
+                hour_hours = len(rows) * (5 / 60)
+                est_charge, _capped = qph.wholesale_usage_charge_weighted(prices, projected, PLAN, CAP, hour_hours)
+                entry["est_usage"] = sum(projected)
+                entry["est_charge"] = est_charge
+                entry["est_n_projected"] = n_projected
             if entry:
                 self.hour_stats[h] = entry
 
@@ -989,12 +1010,18 @@ class App:
         """Draws a one-row-per-hour table (Hour / Avg spot / Usage / Cost) at
         row y, returns next free row. Deliberately vertical (24 rows) rather
         than the old compact multi-column grid - easier to read than cramming
-        avg+usage+cost into a small cell. Hours covered by imported actual
-        data show real usage/cost (self.hour_stats' "usage"/"charge"/
+        avg+usage+cost into a small cell. Hours fully covered by imported
+        actual data show real usage/cost (self.hour_stats' "usage"/"charge"/
         "covered" - see fetch_current()) alongside the AEMO spot-price
-        average; hours without an import show spot-price-average only, with
-        "--" for usage/cost. A trailing "~" on a value marks partial hour
-        coverage (<12 of the hour's 5-min intervals present)."""
+        average, unmarked. Hours only partially covered (or not covered at
+        all) fall back to that hour's projected usage/cost instead
+        ("est_usage"/"est_charge", also from fetch_current() - real readings
+        plus the historical hour-of-day shape filling the gaps, same model
+        as draw_usage_cost()'s whole-day estimate), marked "^" since it's
+        not the real reading. If neither real nor projected data exists for
+        an hour (not enough imported history yet), usage/cost show "--". A
+        trailing "~" on the spot-price average marks partial price-data
+        coverage for the hour (<12 of its 5-min intervals published)."""
         if not self.hour_stats:
             self.safe_addstr(y, 0, "(no hourly data for this day yet)")
             return y + 1
@@ -1009,6 +1036,7 @@ class App:
         self.safe_addstr(y, 0, rule)
         y += 1
 
+        any_estimated = False
         max_y = self.stdscr.getmaxyx()[0] - 1
         for h in range(24):
             if y >= max_y:
@@ -1023,8 +1051,12 @@ class App:
                 continue
             avg = stats.get("avg")
             usage, charge, covered = stats.get("usage"), stats.get("charge"), stats.get("covered")
+            est_usage, est_charge = stats.get("est_usage"), stats.get("est_charge")
             avg_s = f"${avg:.4f}{'~' if stats.get('n', 0) < 12 else ''}" if avg is not None else "--"
-            if usage is not None:
+            if est_usage is not None:
+                usage_s, cost_s = f"{est_usage:.2f}^", f"${est_charge:.2f}^"
+                any_estimated = True
+            elif usage is not None:
                 mark = "~" if covered < 12 else ""
                 usage_s, cost_s = f"{usage:.2f}{mark}", f"${charge:.2f}"
             else:
@@ -1034,6 +1066,13 @@ class App:
             if self.hour == h:
                 attr |= curses.A_REVERSE | curses.A_BOLD
             self.safe_addstr(y, 0, col.format(label, avg_s, usage_s, cost_s), attr)
+            y += 1
+        if any_estimated:
+            self.safe_addstr(
+                y, 0,
+                f"  ^ = projected from {self.hist_days} day(s) of historical usage at that hour, not actual",
+                curses.A_DIM,
+            )
             y += 1
         return y
 
@@ -1132,9 +1171,12 @@ class App:
             # the historical hour-of-day shape, and price each interval
             # (real or projected) against its own spot price / TOU period -
             # see qph.historical_hourly_usage()/project_interval_usage().
-            profile, e_hist_days = qph.historical_hourly_usage(self.actual_data, exclude_day=self.day)
+            # self.hourly_profile/self.hist_days are computed once in
+            # fetch_current() and shared with draw_hour_table()'s per-hour
+            # estimates.
+            e_hist_days = self.hist_days
             if e_hist_days >= qph.MIN_HISTORY_DAYS_FOR_PROJECTION:
-                projected, e_projected = qph.project_interval_usage(stamps, self.actual_data, profile)
+                projected, e_projected = qph.project_interval_usage(stamps, self.actual_data, self.hourly_profile)
                 e_usage_basis = sum(projected)
                 _e_total, e_fixed, e_energy, _capped = qph.estimate_cost_weighted(values, projected, PLAN, CAP, hours)
                 e_network_by_period = qph.actual_network_charge_by_period(list(zip(stamps, projected)), PLAN)

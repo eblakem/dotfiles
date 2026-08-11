@@ -90,6 +90,10 @@ CAP = qp.DEFAULT_CAP
 BILLING_CYCLE_ANCHOR = date(2026, 8, 5)
 BILLING_CYCLE_DAYS = 28
 
+# How long App._live_rows() trusts its cached copy of AEMO's live ~24h
+# rolling feed before hitting the API again - see that method's docstring.
+LIVE_FEED_REFRESH = timedelta(hours=1)
+
 
 # ---- pure helpers (no curses) -----------------------------------------
 
@@ -534,6 +538,7 @@ class App:
         self.summary_year, self.summary_month = day.year, day.month
         self.summary_fetch_error = ""
         self.cache: dict[tuple[str, int, int], list[tuple[str, float]]] = {}
+        self._live_cache: dict[str, tuple[datetime, list[tuple[str, float]]]] = {}
         self.history = load_history()
         self.fields = Fields()
         self.status = ""
@@ -599,6 +604,34 @@ class App:
 
     # -- data ---------------------------------------------------------
 
+    def _live_rows(self, force: bool = False) -> list[tuple[str, float]]:
+        """AEMO's live ~24h rolling feed for self.region (see
+        qph.fetch_live_actual()), only relevant when viewing today (a past
+        day is fully covered by the archive CSV already, so this returns
+        `[]` without even checking the cache). fetch_current() runs on every
+        day/hour navigation key, and this feed lives behind a real network
+        call (qp.API_URL, up to qp.REQUEST_TIMEOUT=10s) - without
+        throttling, arrowing around today's hours hit AEMO on every single
+        keypress, which made that screen noticeably sluggish (or worse,
+        stalled for seconds on a slow/dropped request). Cached per region
+        for LIVE_FEED_REFRESH instead, so ordinary navigation reuses the
+        last fetch; `force` (the 'r' manual refresh) always bypasses that
+        and fetches fresh. A failed fetch falls back to whatever's cached
+        (even if stale) rather than losing today's live data entirely, same
+        fallback behaviour as the old qph.augment_with_live()."""
+        if self.day != date.today():
+            return []
+        cached = self._live_cache.get(self.region)
+        now = datetime.now()
+        if not force and cached and now - cached[0] < LIVE_FEED_REFRESH:
+            return cached[1]
+        try:
+            live = qph.fetch_live_actual(self.region)
+        except (urllib.error.URLError, TimeoutError, ValueError, KeyError, OSError):
+            return cached[1] if cached else []
+        self._live_cache[self.region] = (now, live)
+        return live
+
     def fetch_current(self, force: bool = False) -> None:
         self.error = ""
         # Always pull in the next day's month too: hour 23's window (23:05
@@ -624,7 +657,11 @@ class App:
         all_rows: list[tuple[str, float]] = []
         for y, m in months:
             all_rows.extend(self.cache[(self.region, y, m)])
-        all_rows = qph.augment_with_live(all_rows, self.region, self.day)
+        # Same archive-wins merge as qph.augment_with_live(), but sourced
+        # from the throttled live feed below instead of a fresh fetch every
+        # call - see _live_rows().
+        have = {t for t, _ in all_rows}
+        all_rows = all_rows + [(t, p) for t, p in self._live_rows(force) if t not in have]
         self.lookup = dict(all_rows)
         self.day_rows = sorted(qph.day_prices(all_rows, self.day))
 

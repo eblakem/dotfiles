@@ -61,6 +61,12 @@ import qld_price as qp
 CSV_URL = "https://aemo.com.au/aemo/data/nem/priceanddemand/PRICE_AND_DEMAND_{ym}_{region}.csv"
 REQUEST_TIMEOUT = 15
 
+# Below this many distinct historical days of actual data, historical_hourly_usage()'s
+# per-hour shape is too noisy (one unusual day could dominate a single hour's average) to
+# trust over the simpler partial-actual-flat fallback - see project_interval_usage() and
+# qld_price_tui.py's draw_usage_cost().
+MIN_HISTORY_DAYS_FOR_PROJECTION = 2
+
 # Where retailer "Wholesale Data Export" CSVs (actual per-interval usage +
 # already-computed Wholesale Usage Charge) get dropped for qld_price_tui.py
 # to pick up automatically - same folder as the account's other WholeSave
@@ -331,6 +337,98 @@ def estimate_cost(
     `usage_kwh` spread evenly across the given per-interval wholesale prices
     over `hours`. Returns (total, fixed, variable, intervals_capped)."""
     variable, capped = wholesale_usage_charge(prices_kwh, usage_kwh, plan, cap, hours)
+    fixed = plan.fixed_cost_per_hour * hours  # already GST-inclusive
+    return fixed + variable, fixed, variable, capped
+
+
+def historical_hourly_usage(
+    actual_data: dict[str, tuple[float, float]], exclude_day: date | None = None
+) -> tuple[dict[int, float], int]:
+    """Average per-5-minute-interval usage (kWh) for each hour-of-day
+    (0-23), built from every day of real imported readings in `actual_data`
+    (see sync_actual_data()) - the day-to-day "usage shape" project_interval_
+    usage() uses to fill in hours that don't have actual data yet, instead
+    of assuming a flat/even load across the whole day. `exclude_day`
+    (normally the in-progress day being projected) is left out of the
+    average so its own already-known hours don't bias the shape used to
+    project its remaining ones. Returns (profile, n_days) - n_days is how
+    many distinct calendar days contributed, so callers can decide whether
+    there's enough history to trust the shape (see
+    MIN_HISTORY_DAYS_FOR_PROJECTION)."""
+    buckets: dict[int, list[float]] = {h: [] for h in range(24)}
+    days: set[date] = set()
+    for ts, (usage, _charge) in actual_data.items():
+        d = datetime.strptime(ts[:10], "%Y/%m/%d").date()
+        if exclude_day is not None and d == exclude_day:
+            continue
+        days.add(d)
+        buckets[interval_hour(ts)].append(usage)
+    profile = {h: sum(v) / len(v) for h, v in buckets.items() if v}
+    return profile, len(days)
+
+
+def project_interval_usage(
+    stamps: list[str],
+    actual_data: dict[str, tuple[float, float]],
+    hourly_profile: dict[int, float],
+) -> tuple[list[float], int]:
+    """Per-interval usage (kWh) for each of `stamps`, in order: the real
+    reading from `actual_data` where available, else that interval's
+    hour-of-day historical average from `hourly_profile` (see
+    historical_hourly_usage()) - falling back to the profile's overall
+    average for an hour that has no historical reading of its own (e.g. a
+    rarely-observed hour). Returns (usages, n_projected) - n_projected is
+    how many of the returned values are projections rather than real
+    readings."""
+    overall = sum(hourly_profile.values()) / len(hourly_profile) if hourly_profile else 0.0
+    usages = []
+    n_projected = 0
+    for ts in stamps:
+        got = actual_data.get(ts)
+        if got is not None:
+            usages.append(got[0])
+        else:
+            usages.append(hourly_profile.get(interval_hour(ts), overall))
+            n_projected += 1
+    return usages, n_projected
+
+
+def wholesale_usage_charge_weighted(
+    prices_kwh: list[float], usages_kwh: list[float], plan: qp.Plan, cap: float, hours: float
+) -> tuple[float, int]:
+    """Like wholesale_usage_charge(), but priced from each interval's own
+    usage (`usages_kwh`, same order/length as `prices_kwh` - see
+    project_interval_usage()) instead of one total spread evenly, so a
+    usage shape that isn't flat (e.g. an evening spike) prices against that
+    interval's own spot price and demand-cap status, not an averaged one.
+    Returns (charge_incl_gst, intervals_capped)."""
+    n = len(prices_kwh)
+    if n == 0:
+        return 0.0, 0
+    interval_hours = hours / n
+    raw = 0.0
+    capped = 0
+    for price, usage in zip(prices_kwh, usages_kwh):
+        load_kw = usage / interval_hours if interval_hours else 0.0
+        within_cap_demand = load_kw <= plan.cap_demand_kw
+        if price > 0 and within_cap_demand:
+            effective = min(price, cap)
+            if effective < price:
+                capped += 1
+        else:
+            effective = price
+        raw += effective * usage
+    raw *= plan.dlf * plan.mlf
+    return raw * (1 + plan.gst_rate), capped
+
+
+def estimate_cost_weighted(
+    prices_kwh: list[float], usages_kwh: list[float], plan: qp.Plan, cap: float, hours: float
+) -> tuple[float, float, float, int]:
+    """Like estimate_cost(), but priced from per-interval usage instead of
+    a flat total - see wholesale_usage_charge_weighted(). Returns (total,
+    fixed, variable, intervals_capped)."""
+    variable, capped = wholesale_usage_charge_weighted(prices_kwh, usages_kwh, plan, cap, hours)
     fixed = plan.fixed_cost_per_hour * hours  # already GST-inclusive
     return fixed + variable, fixed, variable, capped
 

@@ -1058,25 +1058,37 @@ class App:
         overshot two real bills by ~$0.52; without it they're within ~1.5%,
         i.e. rounding).
 
-        The Estimate column's per-meter Network rows and Avg draw are
-        themselves estimates, not real data - qph.estimated_network_charge_
-        by_period() and the avg-draw figure both assume the Estimate's
-        usage is spread evenly across the window (the same flat-load
-        assumption qph.estimate_cost() already uses for the wholesale
-        energy charge), marked with "~" to flag that. Less trustworthy than
-        Actual's whenever real usage isn't actually flat (e.g. a
-        controlled-load spike concentrated in one TOU period) - Actual is
-        the reliable figure whenever it's available.
+        When there's a manual Usage [u] figure, or this is a single-hour
+        window, the Estimate column's per-meter Network rows and Avg draw
+        are themselves estimates, not real data - qph.estimated_network_
+        charge_by_period() and the avg-draw figure both assume the
+        Estimate's usage is spread evenly across the window (the same
+        flat-load assumption qph.estimate_cost() already uses for the
+        wholesale energy charge), marked with "~" to flag that. Less
+        trustworthy than Actual's whenever real usage isn't actually flat
+        (e.g. a controlled-load spike concentrated in one TOU period) -
+        Actual is the reliable figure whenever it's available.
 
-        If nothing's been typed into the manual Usage field yet but Actual
-        has *some* coverage (typically an in-progress "today", which
-        apply_actual_autofill() deliberately won't autofill until the whole
-        window is covered - see its docstring, and the bug that motivated
-        that guard), the Estimate column falls back to using that partial
-        actual usage as its basis instead of sitting entirely blank -
-        marked with "*". This never touches self.fields.usage itself (so
-        pressing s to save still only saves what was actually typed, not a
-        partial-day figure masquerading as a final one) - it's display-only.
+        On the whole-day view, with no manual Usage typed in, the flat
+        assumption above would badly misprice a day still in progress (it
+        would price the day's *known-so-far* total as if that were all
+        today will ever use). Instead, once enough days of imported actual
+        data exist (qph.MIN_HISTORY_DAYS_FOR_PROJECTION), each hour without
+        actual data yet is filled in from that hour's historical average
+        across previous days (qph.historical_hourly_usage()/project_
+        interval_usage()), and every interval - real or projected - is
+        priced against its own spot price and TOU period
+        (qph.estimate_cost_weighted()/qph.actual_network_charge_by_period())
+        rather than one lumped flat figure. Marked with "^" (not "~", since
+        it's no longer a flat-load estimate) and a count of how many
+        intervals were projected vs real. Below the history threshold, or
+        when a manual Usage figure exists, the Estimate column falls back
+        to the older flat-load behaviour, using partial actual usage as its
+        basis (marked "*") when nothing's been typed manually - see
+        apply_actual_autofill()'s docstring for why it isn't autofilled
+        into the Usage field itself. This never touches self.fields.usage
+        (so pressing s to save still only saves what was actually typed) -
+        it's display-only.
 
         Returns (next free row, e_total) - e_total (the manual estimate's
         total, or None if there's no usage to derive one from) is handed
@@ -1106,11 +1118,36 @@ class App:
             a_avg = a_usage / covered
 
         e_usage = parse_float(self.fields.usage)
-        e_from_actual = e_usage is None and have_actual
-        e_usage_basis = a_usage if e_from_actual else e_usage
-        e_fixed = e_energy = e_network = e_total = e_avg = None
+        whole_day = self.hour is None
+        e_from_actual = e_usage is None and have_actual and not whole_day
+        e_fixed = e_energy = e_network = e_total = e_avg = e_usage_basis = None
         e_network_by_period: dict[str, float] = {}
-        if e_usage_basis is not None:
+        e_projected = e_hist_days = 0
+        e_weighted = False
+        if whole_day and e_usage is None:
+            # No manual total, and this is the whole-day view: rather than
+            # spreading whatever partial actual usage exists flat across
+            # the entire day (badly underestimating a day still in
+            # progress), fill in the hours without actual data yet from
+            # the historical hour-of-day shape, and price each interval
+            # (real or projected) against its own spot price / TOU period -
+            # see qph.historical_hourly_usage()/project_interval_usage().
+            profile, e_hist_days = qph.historical_hourly_usage(self.actual_data, exclude_day=self.day)
+            if e_hist_days >= qph.MIN_HISTORY_DAYS_FOR_PROJECTION:
+                projected, e_projected = qph.project_interval_usage(stamps, self.actual_data, profile)
+                e_usage_basis = sum(projected)
+                _e_total, e_fixed, e_energy, _capped = qph.estimate_cost_weighted(values, projected, PLAN, CAP, hours)
+                e_network_by_period = qph.actual_network_charge_by_period(list(zip(stamps, projected)), PLAN)
+                e_network = sum(e_network_by_period.values())
+                e_total = e_fixed + e_energy + e_network
+                e_avg = e_usage_basis / len(stamps) if stamps else None
+                e_weighted = True
+            elif have_actual:
+                # Not enough history yet to trust the shape - fall back to
+                # the old partial-actual-spread-flat estimate below.
+                e_from_actual = True
+        if not e_weighted and (e_usage is not None or e_from_actual):
+            e_usage_basis = e_usage if e_usage is not None else a_usage
             _e_total, e_fixed, e_energy, _capped = qph.estimate_cost(values, e_usage_basis, PLAN, CAP, hours)
             e_network_by_period = qph.estimated_network_charge_by_period(stamps, e_usage_basis, PLAN)
             e_network = sum(e_network_by_period.values())
@@ -1152,12 +1189,16 @@ class App:
             y, 0,
             row(
                 "Usage (kWh) [u]", a_usage if have_actual else None, e_usage_basis, "{:.3f}",
-                e_suffix="*" if e_from_actual else "",
+                e_suffix="^" if e_weighted and e_projected else ("*" if e_from_actual else ""),
             ),
         )
         y += 1
         self.safe_addstr(
-            y, 0, row("Avg draw (kWh/5min)", a_avg, e_avg, "{:.4f}", e_suffix="~" if e_avg is not None else "")
+            y, 0,
+            row(
+                "Avg draw (kWh/5min)", a_avg, e_avg, "{:.4f}",
+                e_suffix="" if e_weighted else ("~" if e_avg is not None else ""),
+            ),
         )
         y += 1
         self.safe_addstr(y, 0, row("Fixed charge", a_fixed, e_fixed))
@@ -1167,9 +1208,10 @@ class App:
         for period in periods_present:
             a_val = a_network_by_period.get(period)
             e_val = e_network_by_period.get(period)
+            e_net_suffix = "" if e_weighted else ("~" if e_val is not None else "")
             self.safe_addstr(
                 y, 0,
-                row(f"Network ({period_label[period]})", a_val, e_val, e_suffix="~" if e_val is not None else ""),
+                row(f"Network ({period_label[period]})", a_val, e_val, e_suffix=e_net_suffix),
                 curses.color_pair(TOU_COLOR_PAIR[period]),
             )
             y += 1
@@ -1185,7 +1227,15 @@ class App:
                 y, 0, row(f"vs billed [c] ${cost:.2f}", a_diff, e_diff, "{:+.2f}"), curses.color_pair(3)
             )
             y += 1
-        if e_avg is not None or e_network is not None:
+        if e_weighted and e_projected:
+            self.safe_addstr(
+                y, 0,
+                f"  ^ = {e_projected}/{len(stamps)} intervals have no actual data yet - projected from "
+                f"{e_hist_days} day(s) of historical usage at that hour",
+                curses.A_DIM,
+            )
+            y += 1
+        elif not e_weighted and (e_avg is not None or e_network is not None):
             self.safe_addstr(
                 y, 0, "  ~ = estimate assumes usage spread evenly across the window", curses.A_DIM
             )

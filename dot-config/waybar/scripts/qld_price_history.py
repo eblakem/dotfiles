@@ -433,6 +433,47 @@ def estimate_cost_weighted(
     return fixed + variable, fixed, variable, capped
 
 
+def project_day_summary(
+    stamps: list[str],
+    price_lookup: dict[str, float],
+    actual_data: dict[str, tuple[float, float]],
+    plan: qp.Plan,
+    cap: float,
+) -> dict | None:
+    """Whole-day usage/cost projection for `stamps` (normally a day's set of
+    5-min timestamps that have spot-price data), built the same way as
+    qld_price_tui.py's whole-day Estimate column: real usage from
+    `actual_data` where available, the historical hour-of-day shape
+    (historical_hourly_usage(), excluding this day itself) filling in the
+    rest, each interval priced against its own spot price from
+    `price_lookup` ($/MWh, as returned by fetch_month()/augment_with_live())
+    and TOU period. Meant for previewing a day that hasn't been billed/saved
+    yet - e.g. today, in a month-summary table. Returns None if none of
+    `stamps` have price data, or there isn't enough historical data to trust
+    the shape (MIN_HISTORY_DAYS_FOR_PROJECTION) - the caller decides what
+    day `stamps` represents. Returns {"usage", "cost", "interval_avg",
+    "n_projected", "n"}."""
+    priced_stamps = [ts for ts in stamps if ts in price_lookup]
+    if not priced_stamps:
+        return None
+    day = datetime.strptime(priced_stamps[0][:10], "%Y/%m/%d").date()
+    profile, n_days = historical_hourly_usage(actual_data, exclude_day=day)
+    if n_days < MIN_HISTORY_DAYS_FOR_PROJECTION:
+        return None
+    prices = [price_lookup[ts] / 1000.0 for ts in priced_stamps]
+    projected, n_projected = project_interval_usage(priced_stamps, actual_data, profile)
+    hours = len(priced_stamps) * (5 / 60)
+    total, _fixed, _energy, _capped = estimate_cost_weighted(prices, projected, plan, cap, hours)
+    network = sum(actual_network_charge_by_period(list(zip(priced_stamps, projected)), plan).values())
+    return {
+        "usage": sum(projected),
+        "cost": total + network,
+        "interval_avg": sum(projected) / len(priced_stamps),
+        "n_projected": n_projected,
+        "n": len(priced_stamps),
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("day", nargs="?", help="Date to check, DD-MM-YYYY (default: yesterday)")

@@ -326,16 +326,17 @@ def format_summary_markdown(
         "| --- | ---: | ---: | ---: | ---: |",
     ]
     total_usage = total_cost = 0.0
-    any_usage = any_cost = False
+    any_usage = any_cost = any_estimated = False
     interval_avgs = []
     cap_watch = []
     for r in rows:
         usage, cost = r["usage"], r["cost"]
         interval_avg = r.get("interval_avg")
         over_cap = r.get("interval_over_cap")
-        usage_s = f"{usage:.3f}" if usage is not None else "-"
+        mark = "^" if r.get("estimated") else ""
+        usage_s = f"{usage:.3f}{mark}" if usage is not None else "-"
         interval_avg_s = f"{interval_avg:.4f}" if interval_avg is not None else "-"
-        cost_s = f"{cost:.2f}" if cost is not None else "-"
+        cost_s = f"{cost:.2f}{mark}" if cost is not None else "-"
         rate_s = f"{cost / usage:.4f}" if usage and cost is not None else "-"
         lines.append(f"| {r['date'].strftime('%a %d %b')} | {usage_s} | {interval_avg_s} | {cost_s} | {rate_s} |")
         if usage is not None:
@@ -348,13 +349,19 @@ def format_summary_markdown(
             interval_avgs.append(interval_avg)
         if over_cap:
             cap_watch.append((r["date"], over_cap))
-    total_usage_s = f"{total_usage:.3f}" if any_usage else "-"
-    total_cost_s = f"{total_cost:.2f}" if any_cost else "-"
+        if r.get("estimated"):
+            any_estimated = True
+    total_mark = "^" if any_estimated else ""
+    total_usage_s = f"{total_usage:.3f}{total_mark}" if any_usage else "-"
+    total_cost_s = f"{total_cost:.2f}{total_mark}" if any_cost else "-"
     total_rate_s = f"{total_cost / total_usage:.4f}" if any_usage and any_cost and total_usage else "-"
     month_interval_avg_s = f"{sum(interval_avgs) / len(interval_avgs):.4f}" if interval_avgs else "-"
     lines.append(
         f"| **Total** | **{total_usage_s}** | **{month_interval_avg_s}** | **{total_cost_s}** | **{total_rate_s}** |"
     )
+    if any_estimated:
+        lines.append("")
+        lines.append("^ = today, projected from historical hour-of-day usage (not yet saved)")
     if not rows:
         lines.append("")
         lines.append("_No saved days this month._")
@@ -604,22 +611,26 @@ class App:
 
     # -- data ---------------------------------------------------------
 
-    def _live_rows(self, force: bool = False) -> list[tuple[str, float]]:
+    def _live_rows(self, day: date, force: bool = False) -> list[tuple[str, float]]:
         """AEMO's live ~24h rolling feed for self.region (see
-        qph.fetch_live_actual()), only relevant when viewing today (a past
+        qph.fetch_live_actual()), only relevant when `day` is today (a past
         day is fully covered by the archive CSV already, so this returns
-        `[]` without even checking the cache). fetch_current() runs on every
-        day/hour navigation key, and this feed lives behind a real network
-        call (qp.API_URL, up to qp.REQUEST_TIMEOUT=10s) - without
-        throttling, arrowing around today's hours hit AEMO on every single
-        keypress, which made that screen noticeably sluggish (or worse,
-        stalled for seconds on a slow/dropped request). Cached per region
-        for LIVE_FEED_REFRESH instead, so ordinary navigation reuses the
-        last fetch; `force` (the 'r' manual refresh) always bypasses that
-        and fetches fresh. A failed fetch falls back to whatever's cached
-        (even if stale) rather than losing today's live data entirely, same
-        fallback behaviour as the old qph.augment_with_live()."""
-        if self.day != date.today():
+        `[]` without even checking the cache) - callers pass whichever day
+        they're building rows for (fetch_current() passes self.day;
+        today_summary_row() always passes date.today(), regardless of
+        self.day, since the month-summary page previews today independent
+        of whatever day the detail view happens to be on). This feed lives
+        behind a real network call (qp.API_URL, up to
+        qp.REQUEST_TIMEOUT=10s) - without throttling, arrowing around
+        today's hours hit AEMO on every single keypress, which made that
+        screen noticeably sluggish (or worse, stalled for seconds on a
+        slow/dropped request). Cached per region for LIVE_FEED_REFRESH
+        instead, so ordinary navigation reuses the last fetch; `force` (the
+        'r' manual refresh) always bypasses that and fetches fresh. A failed
+        fetch falls back to whatever's cached (even if stale) rather than
+        losing today's live data entirely, same fallback behaviour as the
+        old qph.augment_with_live()."""
+        if day != date.today():
             return []
         cached = self._live_cache.get(self.region)
         now = datetime.now()
@@ -661,7 +672,7 @@ class App:
         # from the throttled live feed below instead of a fresh fetch every
         # call - see _live_rows().
         have = {t for t, _ in all_rows}
-        all_rows = all_rows + [(t, p) for t, p in self._live_rows(force) if t not in have]
+        all_rows = all_rows + [(t, p) for t, p in self._live_rows(self.day, force) if t not in have]
         self.lookup = dict(all_rows)
         self.day_rows = sorted(qph.day_prices(all_rows, self.day))
 
@@ -849,7 +860,46 @@ class App:
         self.status = ""
         self.load_summary_prices()
 
-    def export_summary(self) -> None:
+    def today_summary_row(self) -> dict | None:
+        """A preview row for today, built from real usage-so-far plus the
+        historical hour-of-day shape (qph.project_day_summary()) - the same
+        projection draw_usage_cost()'s whole-day Estimate column uses.
+        Without this, today simply doesn't appear in the summary table
+        until it's manually saved (month_summary_rows() only reads saved
+        history), which is the common case since a day in progress isn't
+        "done" yet. Returns None outside today's own month (nowhere else
+        it would belong), if today already has a saved "day" entry (which
+        already gets its own real row - this is only a stand-in for one
+        that doesn't exist yet), or if qph.project_day_summary() can't
+        project (no price data yet, or not enough historical days)."""
+        today = date.today()
+        if (self.summary_year, self.summary_month) != (today.year, today.month):
+            return None
+        if self.history.get(self.region, {}).get(today.isoformat(), {}).get("day", {}):
+            return None
+        key = (self.region, today.year, today.month)
+        archive_rows = self.cache.get(key, [])
+        have = {t for t, _ in archive_rows}
+        all_rows = archive_rows + [(t, p) for t, p in self._live_rows(today) if t not in have]
+        day_rows = qph.day_prices(all_rows, today)
+        stamps = [ts for ts, _ in day_rows]
+        result = qph.project_day_summary(stamps, dict(day_rows), self.actual_data, PLAN, CAP)
+        if result is None:
+            return None
+        return {
+            "date": today,
+            "usage": result["usage"],
+            "cost": result["cost"],
+            "interval_avg": result["interval_avg"],
+            "interval_over_cap": None,
+            "estimated": True,
+        }
+
+    def summary_rows(self) -> list[dict]:
+        """month_summary_rows() (every saved day) plus today_summary_row()
+        (a preview of today, when it isn't saved yet), merged back into
+        date order - shared by draw_summary() and export_summary() so the
+        screen and the markdown export can't drift apart."""
         price_rows = self.cache.get((self.region, self.summary_year, self.summary_month))
         interval_prices = interval_prices_from_rows(price_rows) if price_rows is not None else None
         interval_stats = day_interval_stats(
@@ -858,6 +908,15 @@ class App:
         rows = month_summary_rows(
             self.history, self.region, self.summary_year, self.summary_month, interval_stats
         )
+        today_row = self.today_summary_row()
+        if today_row is not None:
+            rows = sorted(rows + [today_row], key=lambda r: r["date"])
+        return rows
+
+    def export_summary(self) -> None:
+        rows = self.summary_rows()
+        price_rows = self.cache.get((self.region, self.summary_year, self.summary_month))
+        interval_prices = interval_prices_from_rows(price_rows) if price_rows is not None else None
         over_cap_ranges = month_over_cap_ranges(
             self.actual_data, self.summary_year, self.summary_month, interval_prices
         )
@@ -921,6 +980,7 @@ class App:
             self.load_summary_prices()
         elif ch == ord("r"):
             self.load_summary_prices(force=True)
+            self._live_cache.pop(self.region, None)  # also refresh today's projected row, if shown
             self.status = "Refreshed spot prices."
         elif ch == ord("e"):
             self.export_summary()
@@ -1333,14 +1393,9 @@ class App:
 
     def draw_summary(self) -> None:
         h, w = self.stdscr.getmaxyx()
+        rows = self.summary_rows()
         price_rows = self.cache.get((self.region, self.summary_year, self.summary_month))
         interval_prices = interval_prices_from_rows(price_rows) if price_rows is not None else None
-        interval_stats = day_interval_stats(
-            self.actual_data, self.summary_year, self.summary_month, interval_prices
-        )
-        rows = month_summary_rows(
-            self.history, self.region, self.summary_year, self.summary_month, interval_stats
-        )
         over_cap_ranges = month_over_cap_ranges(
             self.actual_data, self.summary_year, self.summary_month, interval_prices
         )
@@ -1367,14 +1422,16 @@ class App:
             self.safe_addstr(y, 0, rule)
             y += 1
 
-            max_rows = max(h - 14 - y, 0)  # leave room for the totals/predicted rows, footnote, status and help lines
+            any_estimated = any(r.get("estimated") for r in rows)
+            max_rows = max(h - 14 - y - (1 if any_estimated else 0), 0)  # leave room for the totals/predicted rows, footnote, status and help lines
             shown = rows[:max_rows]
             for r in shown:
                 usage, cost = r["usage"], r["cost"]
                 interval_avg_val = r.get("interval_avg")
-                usage_s = f"{usage:.3f}" if usage is not None else "-"
+                mark = "^" if r.get("estimated") else ""
+                usage_s = f"{usage:.3f}{mark}" if usage is not None else "-"
                 interval_avg_s = f"{interval_avg_val:.4f}" if interval_avg_val is not None else "-"
-                cost_s = f"{cost:.2f}" if cost is not None else "-"
+                cost_s = f"{cost:.2f}{mark}" if cost is not None else "-"
                 rate_s = f"{cost / usage:.4f}" if usage and cost is not None else "-"
                 self.safe_addstr(
                     y, 0,
@@ -1384,14 +1441,20 @@ class App:
             if len(rows) > len(shown):
                 self.safe_addstr(y, 0, f"... and {len(rows) - len(shown)} more day(s) not shown (export to see all)", curses.A_DIM)
                 y += 1
+            if any_estimated:
+                self.safe_addstr(
+                    y, 0, "  ^ = today, projected from historical hour-of-day usage (not yet saved)", curses.A_DIM
+                )
+                y += 1
 
             total_usage = sum(r["usage"] for r in rows if r["usage"] is not None)
             total_cost = sum(r["cost"] for r in rows if r["cost"] is not None)
             any_usage = any(r["usage"] is not None for r in rows)
             any_cost = any(r["cost"] is not None for r in rows)
             interval_avgs = [r["interval_avg"] for r in rows if r.get("interval_avg") is not None]
-            total_usage_s = f"{total_usage:.3f}" if any_usage else "-"
-            total_cost_s = f"{total_cost:.2f}" if any_cost else "-"
+            total_mark = "^" if any_estimated else ""
+            total_usage_s = f"{total_usage:.3f}{total_mark}" if any_usage else "-"
+            total_cost_s = f"{total_cost:.2f}{total_mark}" if any_cost else "-"
             total_rate_s = f"{total_cost / total_usage:.4f}" if any_usage and any_cost and total_usage else "-"
             month_interval_avg_s = f"{sum(interval_avgs) / len(interval_avgs):.4f}" if interval_avgs else "-"
             over_cap_days = [r for r in rows if r.get("interval_over_cap")]

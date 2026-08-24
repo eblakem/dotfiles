@@ -19,12 +19,6 @@ if [[ -z "$LAT" || -z "$LON" ]]; then
     LON="$(jq -r ".lon" <<< "$IP_GEO")"
 fi
 
-text="$(curl -s "https://wttr.in/$LOC?format=1" | sed 's/ //g')"
-tooltip="$(curl -s "https://wttr.in/$LOC?0QT" |
-    sed 's/\\/\\\\/g' |
-    sed ':a;N;$!ba;s/\n/\\n/g' |
-    sed 's/"/\\"/g')"
-
 weather_icon() {
     case "$1" in
         0) echo "☀️" ;;
@@ -41,11 +35,13 @@ weather_icon() {
     esac
 }
 
+text=""
+tooltip=""
 forecast=""
 if [[ -n "$LAT" && "$LAT" != "null" && -n "$LON" && "$LON" != "null" ]]; then
     CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}"
     CACHE_FILE="$CACHE_DIR/waybar-weather-forecast.json"
-    CACHE_MAX_AGE=1800 # only refetch the forecast every 30 minutes
+    CACHE_MAX_AGE=1800 # only refetch every 30 minutes
 
     mkdir -p "$CACHE_DIR"
     CACHE_AGE=99999
@@ -56,9 +52,20 @@ if [[ -n "$LAT" && "$LAT" != "null" && -n "$LON" && "$LON" != "null" ]]; then
     if [[ "$CACHE_AGE" -lt "$CACHE_MAX_AGE" ]]; then
         FORECAST_JSON="$(cat "$CACHE_FILE")"
     else
-        FORECAST_JSON="$(curl -s "https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=7")"
+        FORECAST_JSON="$(curl -s "https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current_weather=true&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=7")"
         [[ -n "$FORECAST_JSON" ]] && echo "$FORECAST_JSON" > "$CACHE_FILE"
     fi
+
+    CUR_TEMP="$(jq -r '.current_weather.temperature' <<< "$FORECAST_JSON" 2>/dev/null)"
+    CUR_CODE="$(jq -r '.current_weather.weathercode' <<< "$FORECAST_JSON" 2>/dev/null)"
+    CUR_WIND="$(jq -r '.current_weather.windspeed' <<< "$FORECAST_JSON" 2>/dev/null)"
+
+    if [[ -n "$CUR_TEMP" && "$CUR_TEMP" != "null" ]]; then
+        CUR_ICON="$(weather_icon "$CUR_CODE")"
+        text="${CUR_ICON} ${CUR_TEMP}°C"
+        tooltip="<b>Now</b>\\n${CUR_ICON} ${CUR_TEMP}°C  Wind: ${CUR_WIND} km/h"
+    fi
+
     FORECAST_ROWS="$(jq -r '.daily.time as $t | .daily.weathercode as $c | .daily.temperature_2m_max as $mx | .daily.temperature_2m_min as $mn | range(0; ($t|length)) as $i | "\($t[$i])|\($c[$i])|\($mx[$i])|\($mn[$i])"' <<< "$FORECAST_JSON" 2>/dev/null)"
 
     while IFS='|' read -r day code tmax tmin; do
@@ -70,7 +77,7 @@ if [[ -n "$LAT" && "$LAT" != "null" && -n "$LON" && "$LON" != "null" ]]; then
     done <<< "$FORECAST_ROWS"
 fi
 
-if ! grep -q "Unknown location" <<< "$text"; then
+if [[ -n "$text" ]]; then
     if [[ -n "$forecast" ]]; then
         tooltip="${tooltip}\\n\\n<b>7-Day Forecast</b>\\n${forecast}"
     fi

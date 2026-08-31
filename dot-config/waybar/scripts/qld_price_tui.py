@@ -714,21 +714,45 @@ class App:
         # through next-day 00:00) needs it, and so does the per-hour table's
         # hour-23 row, regardless of what's currently selected.
         next_day = self.day + timedelta(days=1)
-        months = {(self.day.year, self.day.month), (next_day.year, next_day.month)}
+        day_month = (self.day.year, self.day.month)
+        next_month = (next_day.year, next_day.month)
         if force:
-            for y, m in months:
+            for y, m in {day_month, next_month}:
                 self.cache.pop((self.region, y, m), None)
-        try:
-            for y, m in months:
-                key = (self.region, y, m)
-                if key not in self.cache:
-                    self.cache[key] = qph.fetch_month(self.region, y, m)
-        except Exception as exc:  # noqa: BLE001 - surface any fetch failure in the UI
-            self.error = f"Fetch failed: {exc}"
-            self.day_rows, self.window_rows, self.window_stamps = [], [], set()
-            self.lookup, self.hour_stats = {}, {}
-            self.hourly_profile, self.hist_days = {}, 0
-            return
+
+        day_key = (self.region, *day_month)
+        is_today = self.day == date.today()
+        if day_key not in self.cache:
+            try:
+                self.cache[day_key] = qph.fetch_month(self.region, *day_month)
+            except Exception as exc:  # noqa: BLE001 - surface any fetch failure in the UI
+                if not is_today:
+                    self.error = f"Fetch failed: {exc}"
+                    self.day_rows, self.window_rows, self.window_stamps = [], [], set()
+                    self.lookup, self.hour_stats = {}, {}
+                    self.hourly_profile, self.hist_days = {}, 0
+                    return
+                # Today's own calendar month may not be archived yet - AEMO
+                # doesn't publish that file until a few days into the month
+                # (same gap as the next-day month below) - but _live_rows()
+                # further down already covers everything that's happened
+                # today via the live ~24h feed, so this is expected, not
+                # fatal. A past day has no such fallback, so it's still a
+                # hard error there (see `is_today` above).
+
+        months = {day_month} if day_key in self.cache else set()
+        next_key = (self.region, *next_month)
+        if next_month != day_month and next_key not in self.cache:
+            try:
+                self.cache[next_key] = qph.fetch_month(self.region, *next_month)
+            except Exception:
+                # Next month's archive may not be published yet (e.g. `self.day`
+                # is the last day of a month that just rolled over) - only
+                # hour 23's boundary row needs it, so skip rather than losing
+                # the rest of the day's data over one missing row.
+                pass
+        if next_key in self.cache:
+            months.add(next_month)
 
         all_rows: list[tuple[str, float]] = []
         for y, m in months:
@@ -907,17 +931,25 @@ class App:
     def _cycle_months(self, start: date, end: date) -> set[tuple[int, int]]:
         return {(start.year, start.month), (end.year, end.month)}
 
-    def cycle_price_rows(self, start: date, end: date) -> list[tuple[str, float]] | None:
+    def cycle_price_rows(self, start: date, end: date) -> list[tuple[str, float]]:
         """Merges the cached AEMO archive rows (see load_summary_prices())
         for every calendar month the [`start`, `end`] billing-cycle range
-        touches (at most two, since a 28-day cycle can never span three) -
-        None if any of those months hasn't been fetched into self.cache yet."""
+        touches (at most two, since a 28-day cycle can never span three).
+        A month not yet in self.cache (e.g. the current month's archive
+        isn't published this early - see load_summary_prices()) is just
+        skipped rather than failing the whole range: _interval_lost_cap()
+        already treats a timestamp missing from the result as "no confirmed
+        spike", which is the correct default for a genuinely uncovered day.
+        Returning None here for a partially-covered cycle would instead make
+        callers drop price data entirely and fall back to demand-only
+        flagging for days that *do* have confirmed prices - a false
+        positive, since exceeding the demand cap only costs anything when
+        the spot price also spiked (see _interval_lost_cap())."""
         rows: list[tuple[str, float]] = []
         for y, m in self._cycle_months(start, end):
             cached = self.cache.get((self.region, y, m))
-            if cached is None:
-                return None
-            rows.extend(cached)
+            if cached is not None:
+                rows.extend(cached)
         return rows
 
     def load_summary_prices(self, force: bool = False) -> None:
@@ -927,20 +959,30 @@ class App:
         feature (see interval_prices_from_rows() / _interval_lost_cap()).
         Failures are recorded in self.summary_fetch_error rather than
         raised, since day usage/cost (the summary's main content) doesn't
-        depend on this succeeding."""
+        depend on this succeeding. The current calendar month is exempted
+        from that error reporting - AEMO doesn't create its archive file
+        until a few days into the month (same 404-on-brand-new-month gap
+        fetch_current() works around for the next-day month), so a missing
+        current month is expected, not a failure worth alarming over; other
+        months already cached stay usable and cycle_price_rows() simply
+        treats the still-missing month's data as unavailable for now."""
         start, end = self.summary_cycle_start, self.summary_cycle_end()
         months = self._cycle_months(start, end)
         if force:
             for y, m in months:
                 self.cache.pop((self.region, y, m), None)
-        try:
-            for y, m in months:
-                key = (self.region, y, m)
-                if key not in self.cache:
-                    self.cache[key] = qph.fetch_month(self.region, y, m)
-            self.summary_fetch_error = ""
-        except Exception as exc:  # noqa: BLE001 - surface any fetch failure in the UI
-            self.summary_fetch_error = f"Spot price fetch failed: {exc}"
+        current_month = (date.today().year, date.today().month)
+        self.summary_fetch_error = ""
+        for y, m in months:
+            key = (self.region, y, m)
+            if key in self.cache:
+                continue
+            try:
+                self.cache[key] = qph.fetch_month(self.region, y, m)
+            except Exception as exc:  # noqa: BLE001 - surface any unexpected fetch failure in the UI
+                if (y, m) == current_month:
+                    continue
+                self.summary_fetch_error = f"Spot price fetch failed: {exc}"
 
     def change_summary_cycle(self, delta: int) -> None:
         self.summary_cycle_start += timedelta(days=BILLING_CYCLE_DAYS * delta)
@@ -989,8 +1031,7 @@ class App:
         date order - shared by draw_summary() and export_summary() so the
         screen and the markdown export can't drift apart."""
         start, end = self.summary_cycle_start, self.summary_cycle_end()
-        price_rows = self.cycle_price_rows(start, end)
-        interval_prices = interval_prices_from_rows(price_rows) if price_rows is not None else None
+        interval_prices = interval_prices_from_rows(self.cycle_price_rows(start, end))
         interval_stats = day_interval_stats(self.actual_data, start, end, interval_prices)
         price_avgs = day_price_avgs(interval_prices, start, end)
         rows = month_summary_rows(self.history, self.region, start, end, interval_stats, price_avgs)
@@ -1002,8 +1043,7 @@ class App:
     def export_summary(self) -> None:
         rows = self.summary_rows()
         start, end = self.summary_cycle_start, self.summary_cycle_end()
-        price_rows = self.cycle_price_rows(start, end)
-        interval_prices = interval_prices_from_rows(price_rows) if price_rows is not None else None
+        interval_prices = interval_prices_from_rows(self.cycle_price_rows(start, end))
         over_cap_ranges = month_over_cap_ranges(self.actual_data, start, end, interval_prices)
         md = format_summary_markdown(self.region, start, end, rows, over_cap_ranges, self.history)
         path = summary_export_path(self.region, start)
@@ -1508,8 +1548,7 @@ class App:
         h, w = self.stdscr.getmaxyx()
         rows = self.summary_rows()
         start, end = self.summary_cycle_start, self.summary_cycle_end()
-        price_rows = self.cycle_price_rows(start, end)
-        interval_prices = interval_prices_from_rows(price_rows) if price_rows is not None else None
+        interval_prices = interval_prices_from_rows(self.cycle_price_rows(start, end))
         over_cap_ranges = month_over_cap_ranges(self.actual_data, start, end, interval_prices)
         cycle_label = f"{start.strftime('%d %b')} - {end.strftime('%d %b %Y')}"
         header = f" {self.region}  {cycle_label}  [BILLING CYCLE SUMMARY] "

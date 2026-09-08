@@ -57,6 +57,7 @@ import urllib.request
 from datetime import date, datetime, timedelta
 
 import qld_price as qp
+import qld_weather as qw
 
 CSV_URL = "https://aemo.com.au/aemo/data/nem/priceanddemand/PRICE_AND_DEMAND_{ym}_{region}.csv"
 REQUEST_TIMEOUT = 15
@@ -66,6 +67,19 @@ REQUEST_TIMEOUT = 15
 # trust over the simpler partial-actual-flat fallback - see project_interval_usage() and
 # qld_price_tui.py's draw_usage_cost().
 MIN_HISTORY_DAYS_FOR_PROJECTION = 2
+
+# A mild Brisbane day where neither heating nor cooling is doing much work -
+# used by degree_day() as the zero point a day's mean temperature is measured
+# against. Not trying to model heating vs cooling separately (that would need
+# more history than a few weeks to fit two slopes instead of one) - just "how
+# far from an unremarkable day", on the theory that both a hot day (more A/C)
+# and a cold one (more heating) push usage the same direction: up.
+COMFORT_TEMP_C = 22.0
+
+# Below this many days of actual usage with a matching temperature reading,
+# weather_day_multiplier()'s regression is too thin to trust (same reasoning
+# as MIN_HISTORY_DAYS_FOR_PROJECTION) - falls back to no adjustment (1.0).
+MIN_WEATHER_DAYS_FOR_ADJUSTMENT = 5
 
 # Where retailer "Wholesale Data Export" CSVs (actual per-interval usage +
 # already-computed Wholesale Usage Charge) get dropped for qld_price_tui.py
@@ -256,6 +270,18 @@ def interval_hour(ts: str) -> int:
     return (hh - 1) % 24 if mm == 0 else hh
 
 
+def ts_date(ts: str) -> date:
+    """The calendar date a "YYYY/MM/DD HH:MM:SS"-format timestamp (the key
+    format used throughout - AEMO archive rows, actual_data, hour_window()
+    stamps) falls on. Slices the fixed-width prefix directly instead of
+    datetime.strptime(ts[:10], "%Y/%m/%d") - functionally identical for this
+    format, but strptime's locale-lookup overhead made it measurably the
+    hot path in historical_hourly_usage()/weather_day_multiplier(), which
+    re-scan every interval in actual_data on every day navigated to in
+    qld_price_tui.py."""
+    return date(int(ts[0:4]), int(ts[5:7]), int(ts[8:10]))
+
+
 def actual_network_charge_by_period(stamped_usage: list[tuple[str, float]], plan: qp.Plan) -> dict[str, float]:
     """Exact network charge for real per-interval (timestamp, usage_kwh)
     pairs (as found in the imported actual-data cache), split by TOU meter
@@ -295,6 +321,46 @@ def estimated_network_charge_by_period(stamps: list[str], usage_kwh: float, plan
 def estimated_network_charge(stamps: list[str], usage_kwh: float, plan: qp.Plan) -> float:
     """Total across all three TOU meters - see estimated_network_charge_by_period()."""
     return sum(estimated_network_charge_by_period(stamps, usage_kwh, plan).values())
+
+
+def actual_energy_charge_by_period(stamped_charge: list[tuple[str, float]]) -> dict[str, float]:
+    """Real per-interval Wholesale Usage Charge, exactly as already computed
+    by the retailer in imported actual data (no re-derivation via spot
+    price/DLF/MLF - see wholesale_usage_charge_by_period() for the estimate
+    equivalent) - split by TOU meter, same classification as
+    actual_network_charge_by_period()."""
+    totals = {"peak": 0.0, "offpeak": 0.0, "shoulder": 0.0}
+    for ts, charge in stamped_charge:
+        period = qp.tou_period_for_hour(interval_hour(ts))
+        totals[period] += charge
+    return totals
+
+
+def wholesale_usage_charge_by_period(
+    stamps: list[str], prices_kwh: list[float], usages_kwh: list[float], plan: qp.Plan, cap: float, hours: float
+) -> dict[str, float]:
+    """Like wholesale_usage_charge_weighted(), but split by TOU meter
+    (peak/off-peak/shoulder) instead of lumped into one figure - same
+    per-interval price-cap/demand-cap logic, just bucketed by each
+    interval's own qp.tou_period_for_hour(), the way actual_network_charge_
+    by_period() already splits the network charge. Passing a uniform
+    usages_kwh (usage_kwh/n repeated for every stamp) reproduces
+    wholesale_usage_charge()'s flat-spread assumption, just split by period
+    instead of summed into one total."""
+    n = len(prices_kwh)
+    totals = {"peak": 0.0, "offpeak": 0.0, "shoulder": 0.0}
+    if n == 0:
+        return totals
+    interval_hours = hours / n
+    for ts, price, usage in zip(stamps, prices_kwh, usages_kwh):
+        load_kw = usage / interval_hours if interval_hours else 0.0
+        within_cap_demand = load_kw <= plan.cap_demand_kw
+        effective = min(price, cap) if price > 0 and within_cap_demand else price
+        period = qp.tou_period_for_hour(interval_hour(ts))
+        totals[period] += effective * usage
+    for period in totals:
+        totals[period] *= plan.dlf * plan.mlf * (1 + plan.gst_rate)
+    return totals
 
 
 def wholesale_usage_charge(
@@ -358,7 +424,7 @@ def historical_hourly_usage(
     buckets: dict[int, list[float]] = {h: [] for h in range(24)}
     days: set[date] = set()
     for ts, (usage, _charge) in actual_data.items():
-        d = datetime.strptime(ts[:10], "%Y/%m/%d").date()
+        d = ts_date(ts)
         if exclude_day is not None and d == exclude_day:
             continue
         days.add(d)
@@ -367,17 +433,119 @@ def historical_hourly_usage(
     return profile, len(days)
 
 
+def degree_day(mean_temp_c: float) -> float:
+    """How far a day's mean temperature sits from COMFORT_TEMP_C, in
+    either direction - the single scalar weather_day_multiplier() regresses
+    usage against. Folding heating and cooling into one "distance from an
+    unremarkable day" number (rather than fitting separate hot/cold slopes)
+    is deliberate: a few weeks of history isn't enough to fit two slopes
+    reliably, and the assumption that both directions push usage up is
+    reasonable for a household with A/C and any electric heating."""
+    return abs(mean_temp_c - COMFORT_TEMP_C)
+
+
+def weather_day_multiplier(
+    actual_data: dict[str, tuple[float, float]],
+    historical_temps: dict[date, float],
+    forecast_temp: float | None,
+    exclude_day: date | None = None,
+) -> float | None:
+    """How much hotter/colder-than-usual weather should scale up or down
+    the historical hour-of-day usage shape for a day expected to have mean
+    temperature `forecast_temp` - a day-level nudge on top of
+    historical_hourly_usage()'s shape, applied by project_interval_usage()
+    via its `day_multiplier` to whichever intervals it has to project
+    (real readings are never touched).
+
+    Fits a simple least-squares line of degree_day(temp) against that
+    day's mean per-interval usage, across every day in `actual_data` that
+    also has a temperature in `historical_temps` (from
+    qld_weather.historical_daily_temps()) - then reads off what the line
+    predicts for `forecast_temp`'s degree-day, as a ratio against the
+    historical mean usage. A one-variable regression, not a full model:
+    good enough to say "today's forecast is unusually mild/extreme, expect
+    usage a bit below/above the plain historical-hour-of-day shape",
+    without pretending a few weeks of data can support anything richer.
+
+    Returns None (meaning: apply no adjustment, i.e. multiplier 1.0) when
+    `forecast_temp` is unknown, fewer than MIN_WEATHER_DAYS_FOR_ADJUSTMENT
+    days have both usage and a temperature to regress against, or those
+    days' temperatures don't vary enough to fit a line against. The
+    returned multiplier is clamped to [0.5, 2.0] - this regression is
+    fitted on a small, short sample, so a forecast temperature far outside
+    the historical range shouldn't be allowed to extrapolate into an
+    absurd swing."""
+    if forecast_temp is None:
+        return None
+
+    day_usages: dict[date, list[float]] = {}
+    for ts, (usage, _charge) in actual_data.items():
+        d = ts_date(ts)
+        if exclude_day is not None and d == exclude_day:
+            continue
+        day_usages.setdefault(d, []).append(usage)
+
+    points = []
+    for d, usages in day_usages.items():
+        temp = historical_temps.get(d)
+        if temp is not None:
+            points.append((degree_day(temp), sum(usages) / len(usages)))
+
+    if len(points) < MIN_WEATHER_DAYS_FOR_ADJUSTMENT:
+        return None
+
+    xs = [x for x, _ in points]
+    ys = [y for _, y in points]
+    n = len(points)
+    mean_x = sum(xs) / n
+    mean_y = sum(ys) / n
+    var_x = sum((x - mean_x) ** 2 for x in xs)
+    if var_x == 0 or mean_y == 0:
+        return None  # every day equally mild (or no usage at all) - nothing to regress against
+
+    slope = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys)) / var_x
+    intercept = mean_y - slope * mean_x
+    predicted = intercept + slope * degree_day(forecast_temp)
+    if predicted <= 0:
+        return None
+    return max(0.5, min(2.0, predicted / mean_y))
+
+
+def project_weather_multiplier(
+    actual_data: dict[str, tuple[float, float]], day: date
+) -> float | None:
+    """I/O wrapper around weather_day_multiplier(): fetches temperatures
+    for every day actual_data has usage for (qld_weather.
+    historical_daily_temps()) plus `day`'s own expected temperature
+    (qld_weather.temp_for_day() - actual if `day` already happened,
+    forecast otherwise), then hands them to weather_day_multiplier().
+    Meant to be called once per day viewed (e.g. alongside
+    historical_hourly_usage() in qld_price_tui.App.fetch_current()), not
+    once per interval. Returns None (no adjustment) if actual_data is
+    empty or the weather lookups fail - see qld_weather's own fallbacks."""
+    if not actual_data:
+        return None
+    days = {ts_date(ts) for ts in actual_data}
+    historical_temps = qw.historical_daily_temps(min(days), max(days))
+    forecast_temp = qw.temp_for_day(day)
+    return weather_day_multiplier(actual_data, historical_temps, forecast_temp, exclude_day=day)
+
+
 def project_interval_usage(
     stamps: list[str],
     actual_data: dict[str, tuple[float, float]],
     hourly_profile: dict[int, float],
+    day_multiplier: float = 1.0,
 ) -> tuple[list[float], int]:
     """Per-interval usage (kWh) for each of `stamps`, in order: the real
     reading from `actual_data` where available, else that interval's
     hour-of-day historical average from `hourly_profile` (see
     historical_hourly_usage()) - falling back to the profile's overall
     average for an hour that has no historical reading of its own (e.g. a
-    rarely-observed hour). Returns (usages, n_projected) - n_projected is
+    rarely-observed hour) - scaled by `day_multiplier` (see
+    weather_day_multiplier()) to nudge projected-only intervals up or down
+    for an unusually hot/cold day. Real readings are never scaled - only
+    the modelled fill-in is. Returns (usages, n_projected) - n_projected is
     how many of the returned values are projections rather than real
     readings."""
     overall = sum(hourly_profile.values()) / len(hourly_profile) if hourly_profile else 0.0
@@ -388,7 +556,7 @@ def project_interval_usage(
         if got is not None:
             usages.append(got[0])
         else:
-            usages.append(hourly_profile.get(interval_hour(ts), overall))
+            usages.append(hourly_profile.get(interval_hour(ts), overall) * day_multiplier)
             n_projected += 1
     return usages, n_projected
 
@@ -447,12 +615,15 @@ def project_day_summary(
     (historical_hourly_usage(), excluding this day itself) filling in the
     rest, each interval priced against its own spot price from
     `price_lookup` ($/MWh, as returned by fetch_month()/augment_with_live())
-    and TOU period. Meant for previewing a day that hasn't been billed/saved
-    yet - e.g. today, in a month-summary table. Returns None if none of
-    `stamps` have price data, or there isn't enough historical data to trust
-    the shape (MIN_HISTORY_DAYS_FOR_PROJECTION) - the caller decides what
-    day `stamps` represents. Returns {"usage", "cost", "interval_avg",
-    "n_projected", "n"}."""
+    and TOU period, further nudged up/down by that day's forecast/actual
+    temperature (project_weather_multiplier()). Meant for previewing a day
+    that hasn't been billed/saved yet - e.g. today, in a month-summary
+    table. Returns None if none of `stamps` have price data, or there
+    isn't enough historical data to trust the shape
+    (MIN_HISTORY_DAYS_FOR_PROJECTION) - the caller decides what day
+    `stamps` represents. Returns {"usage", "cost", "price_avg",
+    "n_projected", "n", "day_multiplier"} - day_multiplier is the weather
+    nudge actually applied (1.0 if none)."""
     priced_stamps = [ts for ts in stamps if ts in price_lookup]
     if not priced_stamps:
         return None
@@ -460,17 +631,19 @@ def project_day_summary(
     profile, n_days = historical_hourly_usage(actual_data, exclude_day=day)
     if n_days < MIN_HISTORY_DAYS_FOR_PROJECTION:
         return None
+    day_multiplier = project_weather_multiplier(actual_data, day) or 1.0
     prices = [price_lookup[ts] / 1000.0 for ts in priced_stamps]
-    projected, n_projected = project_interval_usage(priced_stamps, actual_data, profile)
+    projected, n_projected = project_interval_usage(priced_stamps, actual_data, profile, day_multiplier)
     hours = len(priced_stamps) * (5 / 60)
     total, _fixed, _energy, _capped = estimate_cost_weighted(prices, projected, plan, cap, hours)
     network = sum(actual_network_charge_by_period(list(zip(priced_stamps, projected)), plan).values())
     return {
         "usage": sum(projected),
         "cost": total + network,
-        "interval_avg": sum(projected) / len(priced_stamps),
+        "price_avg": sum(prices) / len(prices),
         "n_projected": n_projected,
         "n": len(priced_stamps),
+        "day_multiplier": day_multiplier,
     }
 
 

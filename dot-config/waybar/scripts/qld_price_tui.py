@@ -49,6 +49,7 @@ from datetime import date, datetime, timedelta
 import qld_globird_fetch as qgf
 import qld_price as qp
 import qld_price_history as qph
+import qld_weather as qw
 
 REGIONS = ["QLD1", "NSW1", "VIC1", "SA1", "TAS1"]
 
@@ -179,7 +180,7 @@ def day_interval_stats(
     `interval_prices` if given; otherwise demand alone, same as before)."""
     buckets: dict[date, list[tuple[str, float]]] = {}
     for ts, (usage, _charge) in actual_data.items():
-        d = datetime.strptime(ts[:10], "%Y/%m/%d").date()
+        d = qph.ts_date(ts)
         if start <= d <= end:
             buckets.setdefault(d, []).append((ts, usage))
     cap_kwh_per_interval = PLAN.cap_demand_kw / 12
@@ -207,7 +208,7 @@ def day_price_avgs(
         return {}
     buckets: dict[date, list[float]] = {}
     for ts, price in interval_prices.items():
-        d = datetime.strptime(ts[:10], "%Y/%m/%d").date()
+        d = qph.ts_date(ts)
         if start <= d <= end:
             buckets.setdefault(d, []).append(price)
     return {d: sum(prices) / len(prices) for d, prices in buckets.items()}
@@ -236,13 +237,13 @@ def month_over_cap_ranges(
     days_by_time: dict[str, set[date]] = {}
     counts_by_time: dict[str, int] = {}
     for ts, (usage, _charge) in actual_data.items():
-        dt = datetime.strptime(ts, "%Y/%m/%d %H:%M:%S")
-        if not (start <= dt.date() <= end):
+        d = qph.ts_date(ts)
+        if not (start <= d <= end):
             continue
         if not _interval_lost_cap(usage, ts, cap_kwh_per_interval, interval_prices):
             continue
-        clock = dt.strftime("%H:%M")
-        days_by_time.setdefault(clock, set()).add(dt.date())
+        clock = ts[11:16]  # "HH:MM" - fixed "YYYY/MM/DD HH:MM:SS" format, see ts_date()
+        days_by_time.setdefault(clock, set()).add(d)
         counts_by_time[clock] = counts_by_time.get(clock, 0) + 1
 
     def to_minutes(clock: str) -> int:
@@ -273,6 +274,7 @@ def month_summary_rows(
     end: date,
     interval_stats: dict[date, dict] | None = None,
     price_avgs: dict[date, float] | None = None,
+    weather: dict[date, dict] | None = None,
 ) -> list[dict]:
     """Whole-day usage/cost for each saved day in the [`start`, `end`] date
     range (a billing cycle - see billing_cycle_containing()), pulled from
@@ -282,10 +284,17 @@ def month_summary_rows(
     day_interval_stats()) fills in each row's demand-cap-exceedance count,
     when actual import data covers that day. `price_avgs` (from
     day_price_avgs()) fills in each row's average AEMO spot price for the
-    day, whenever spot price data covers it."""
+    day, whenever spot price data covers it. `weather` (from
+    qld_weather.historical_daily_weather(), keyed by calendar day) fills
+    in each row's mean temperature/cloud cover/solar radiation - plain
+    context for reading day-to-day usage and price swings against,
+    independent of whether that day's usage was ever a weather-adjusted
+    *projection* (see qph.weather_day_multiplier() - only today's
+    not-yet-saved preview row actually uses that, and only its temp)."""
     region_entry = history.get(region, {})
     interval_stats = interval_stats or {}
     price_avgs = price_avgs or {}
+    weather = weather or {}
     rows = []
     for d in date_range(start, end):
         day_bucket = region_entry.get(d.isoformat(), {}).get("day", {})
@@ -293,6 +302,7 @@ def month_summary_rows(
         if usage is None and cost is None:
             continue
         stats = interval_stats.get(d, {})
+        day_weather = weather.get(d, {})
         rows.append(
             {
                 "date": d,
@@ -300,6 +310,9 @@ def month_summary_rows(
                 "cost": cost,
                 "price_avg": price_avgs.get(d),
                 "interval_over_cap": stats.get("over_cap"),
+                "temp": day_weather.get("temp"),
+                "cloud": day_weather.get("cloud"),
+                "radiation": day_weather.get("radiation"),
             }
         )
     return rows
@@ -356,18 +369,27 @@ def format_summary_markdown(
     lines = [
         f"# {region} energy usage -- {cycle_label} billing cycle",
         "",
-        "| Date | Usage (kWh) | Avg price ($/kWh) | Cost ($) | Rate ($/kWh) |",
-        "| --- | ---: | ---: | ---: | ---: |",
+        "| Date | Temp (C) | Cloud (%) | Solar (MJ/m2) | Usage (kWh) | Avg price ($/kWh) | Cost ($) | Rate ($/kWh) |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     total_usage = total_cost = 0.0
     any_usage = any_cost = any_estimated = False
     price_avgs = []
+    temps = []
+    clouds = []
+    radiations = []
     cap_watch = []
     for r in rows:
         usage, cost = r["usage"], r["cost"]
         price_avg = r.get("price_avg")
+        temp = r.get("temp")
+        cloud = r.get("cloud")
+        radiation = r.get("radiation")
         over_cap = r.get("interval_over_cap")
         mark = "^" if r.get("estimated") else ""
+        temp_s = f"{temp:.1f}" if temp is not None else "-"
+        cloud_s = f"{cloud:.0f}" if cloud is not None else "-"
+        radiation_s = f"{radiation:.1f}" if radiation is not None else "-"
         usage_s = f"{usage:.3f}{mark}" if usage is not None else "-"
         price_avg_s = f"{price_avg:.4f}" if price_avg is not None else "-"
         cost_s = f"{cost:.2f}{mark}" if cost is not None else "-"
@@ -375,7 +397,9 @@ def format_summary_markdown(
         date_s = r["date"].strftime("%a %d %b")
         if r["date"] == ACTUAL_DATA_START:
             date_s = f"**{date_s}**"
-        lines.append(f"| {date_s} | {usage_s} | {price_avg_s} | {cost_s} | {rate_s} |")
+        lines.append(
+            f"| {date_s} | {temp_s} | {cloud_s} | {radiation_s} | {usage_s} | {price_avg_s} | {cost_s} | {rate_s} |"
+        )
         if usage is not None:
             total_usage += usage
             any_usage = True
@@ -384,6 +408,12 @@ def format_summary_markdown(
             any_cost = True
         if price_avg is not None:
             price_avgs.append(price_avg)
+        if temp is not None:
+            temps.append(temp)
+        if cloud is not None:
+            clouds.append(cloud)
+        if radiation is not None:
+            radiations.append(radiation)
         if over_cap:
             cap_watch.append((r["date"], over_cap))
         if r.get("estimated"):
@@ -393,12 +423,23 @@ def format_summary_markdown(
     total_cost_s = f"{total_cost:.2f}{total_mark}" if any_cost else "-"
     total_rate_s = f"{total_cost / total_usage:.4f}" if any_usage and any_cost and total_usage else "-"
     month_price_avg_s = f"{sum(price_avgs) / len(price_avgs):.4f}" if price_avgs else "-"
+    month_temp_s = f"{sum(temps) / len(temps):.1f}" if temps else "-"
+    month_cloud_s = f"{sum(clouds) / len(clouds):.0f}" if clouds else "-"
+    month_radiation_s = f"{sum(radiations) / len(radiations):.1f}" if radiations else "-"
     lines.append(
-        f"| **Total** | **{total_usage_s}** | **{month_price_avg_s}** | **{total_cost_s}** | **{total_rate_s}** |"
+        f"| **Total** | **{month_temp_s}** | **{month_cloud_s}** | **{month_radiation_s}** | "
+        f"**{total_usage_s}** | **{month_price_avg_s}** | **{total_cost_s}** | **{total_rate_s}** |"
     )
     if any_estimated:
+        estimated_rows = [r for r in rows if r.get("estimated")]
+        weather_note = ""
+        if len(estimated_rows) == 1:
+            mult = estimated_rows[0].get("day_multiplier")
+            if mult is not None and abs(mult - 1.0) >= 0.01:
+                direction = "up" if mult > 1.0 else "down"
+                weather_note = f", weather-adjusted {direction} {abs(mult - 1.0) * 100:.0f}%"
         lines.append("")
-        lines.append("^ = today, projected from historical hour-of-day usage (not yet saved)")
+        lines.append(f"^ = projected from historical hour-of-day usage (not yet saved){weather_note}")
     if not rows:
         lines.append("")
         lines.append("_No saved days in this billing cycle._")
@@ -505,6 +546,16 @@ def plan_footnote_lines() -> list[str]:
         "independent of how much you used; compare against Rate to see whether your own usage timing "
         "beat or lagged the market average.",
         "",
+        "Temp is that day's mean temperature (Open-Meteo, blank if unavailable) - context for reading "
+        "day-to-day usage swings against hot/cold weather. Only today's row (marked ^) actually has its "
+        "usage projection nudged by this; every other row's Usage/Cost is real, unaffected by weather.",
+        "",
+        "Cloud/Solar are that day's mean cloud cover (%) and total solar radiation reaching the ground "
+        "(MJ/m2, Open-Meteo) - not about your own usage (no solar here), but QLD's very high rooftop "
+        "solar penetration means a sunny day suppresses statewide midday demand (and the AEMO spot "
+        "price with it), while a cloudy one doesn't - context for the Avg price/Rate columns above, "
+        "not folded into any estimate.",
+        "",
         f"Your Wholesale Cap Demand is {p.cap_demand_kw:.1f}kW, i.e. {p.cap_demand_kw / 12:.4f} kWh per "
         f"5-min interval. The price cap (${CAP:.2f}/kWh) only applies to intervals at or under that - go "
         "over it in a single interval and *that interval* is billed at the full uncapped spot price "
@@ -596,6 +647,8 @@ class App:
         self.hour_stats: dict[int, dict] = {}
         self.hourly_profile: dict[int, float] = {}
         self.hist_days = 0
+        self.weather_multiplier: float | None = None
+        self.day_weather: dict | None = None
         self.actual_data: dict[str, tuple[float, float]] = qph.sync_actual_data()
         self.actual_fetch_error: list[str] = []
         self.auto_fetch_actual(self.day)
@@ -682,9 +735,10 @@ class App:
         day is fully covered by the archive CSV already, so this returns
         `[]` without even checking the cache) - callers pass whichever day
         they're building rows for (fetch_current() passes self.day;
-        today_summary_row() always passes date.today(), regardless of
-        self.day, since the month-summary page previews today independent
-        of whatever day the detail view happens to be on). This feed lives
+        summary_rows() passes each unsaved day up to today, regardless of
+        self.day, since the month-summary page previews those independent
+        of whatever day the detail view happens to be on - only the one
+        that's actually today gets anything back here). This feed lives
         behind a real network call (qp.API_URL, up to
         qp.REQUEST_TIMEOUT=10s) - without throttling, arrowing around
         today's hours hit AEMO on every single keypress, which made that
@@ -764,19 +818,22 @@ class App:
         all_rows = all_rows + [(t, p) for t, p in self._live_rows(self.day, force) if t not in have]
         self.lookup = dict(all_rows)
         self.day_rows = sorted(qph.day_prices(all_rows, self.day))
-
-        if self.hour is not None:
-            _, _, stamps = qph.hour_window(self.day, self.hour)
-            self.window_stamps = set(stamps)
-            self.window_rows = [(ts, self.lookup[ts]) for ts in stamps if ts in self.lookup]
-        else:
-            self.window_stamps = set()
-            self.window_rows = self.day_rows
+        self._update_window()
 
         # Shared with draw_usage_cost()'s whole-day projection, computed once
         # here rather than per-draw - see qph.historical_hourly_usage().
         self.hourly_profile, self.hist_days = qph.historical_hourly_usage(self.actual_data, exclude_day=self.day)
         enough_history = self.hist_days >= qph.MIN_HISTORY_DAYS_FOR_PROJECTION
+        # Nudges the hourly_profile fill-in up/down for a day forecast (or,
+        # for a past day, actually recorded) hotter/colder than usual - see
+        # qph.weather_day_multiplier(). None (no adjustment) until there's
+        # enough history, same gate as the shape itself.
+        self.weather_multiplier = qph.project_weather_multiplier(self.actual_data, self.day) if enough_history else None
+        # Not gated by enough_history like the multiplier above - this is
+        # informational only (see draw_detail()'s "Sky" line), not fed into
+        # any projection, so there's no shape to "trust" yet to worry about.
+        self.day_weather = qw.weather_for_day(self.day)
+        day_multiplier = self.weather_multiplier or 1.0
 
         self.hour_stats = {}
         for h in range(24):
@@ -799,7 +856,9 @@ class App:
                 # price the whole hour (real + projected) against its own
                 # spot prices, same model as the whole-day estimate.
                 row_stamps = [ts for ts, _ in rows]
-                projected, n_projected = qph.project_interval_usage(row_stamps, self.actual_data, self.hourly_profile)
+                projected, n_projected = qph.project_interval_usage(
+                    row_stamps, self.actual_data, self.hourly_profile, day_multiplier
+                )
                 hour_hours = len(rows) * (5 / 60)
                 est_charge, _capped = qph.wholesale_usage_charge_weighted(prices, projected, PLAN, CAP, hour_hours)
                 entry["est_usage"] = sum(projected)
@@ -807,6 +866,23 @@ class App:
                 entry["est_n_projected"] = n_projected
             if entry:
                 self.hour_stats[h] = entry
+
+    def _update_window(self) -> None:
+        """Recomputes window_rows/window_stamps for the currently selected
+        hour (or the whole day, if self.hour is None) from self.lookup/
+        self.day_rows - cheap, since it doesn't touch actual_data or the
+        historical/weather projections. Split out of fetch_current() so
+        change_hour()/all_day() (which only change which window of an
+        already-fetched day is selected) don't have to pay for a full
+        re-fetch and re-projection just to move the selection - see
+        change_hour()."""
+        if self.hour is not None:
+            _, _, stamps = qph.hour_window(self.day, self.hour)
+            self.window_stamps = set(stamps)
+            self.window_rows = [(ts, self.lookup[ts]) for ts in stamps if ts in self.lookup]
+        else:
+            self.window_stamps = set()
+            self.window_rows = self.day_rows
 
     def actual_totals(self, stamps: list[str]) -> tuple[float, float, int]:
         """Sum real (usage_kwh, charge_$) from imported data for the given
@@ -827,14 +903,18 @@ class App:
         pre-fill it with the real total - a convenience so it (and the
         modelled estimate) reflect reality without having to type anything.
         Doesn't touch a field that already has a value from history or a
-        prior edit."""
+        prior edit. Doesn't mark the entry dirty either - this runs on every
+        navigation (see on_window_changed()/on_context_changed()), and it's
+        not a user edit, just redisplaying data already sitting in
+        actual_data - flagging "unsaved changes" from merely looking at an
+        hour would make that indicator fire on almost every arrow key
+        press and stop meaning anything."""
         if self.fields.usage.strip() or not self.window_rows:
             return
         stamps = [ts for ts, _ in self.window_rows]
         usage, _, covered = self.actual_totals(stamps)
         if covered == len(stamps):
             self.fields.usage = f"{usage:.4f}"
-            self.dirty = True
 
     # -- history --------------------------------------------------------
 
@@ -898,17 +978,28 @@ class App:
         self.apply_actual_autofill()
         self.status = ""
 
+    def on_window_changed(self) -> None:
+        """Like on_context_changed(), but for a hour/all-day selection
+        change within the *same* day/region - see _update_window(). Skips
+        fetch_current()'s full re-fetch and historical/weather/hour_stats
+        recompute, none of which depend on which window is selected -
+        that's what made arrowing between hours noticeably sluggish."""
+        self._update_window()
+        self.load_fields_from_history()
+        self.apply_actual_autofill()
+        self.status = ""
+
     def change_day(self, delta: int) -> None:
         self.day += timedelta(days=delta)
         self.on_context_changed()
 
     def change_hour(self, delta: int) -> None:
         self.hour = 0 if self.hour is None else (self.hour + delta) % 24
-        self.on_context_changed()
+        self.on_window_changed()
 
     def all_day(self) -> None:
         self.hour = None
-        self.on_context_changed()
+        self.on_window_changed()
 
     def cycle_region(self) -> None:
         self.region_idx = (self.region_idx + 1) % len(REGIONS)
@@ -929,6 +1020,11 @@ class App:
         return self.summary_cycle_start + timedelta(days=BILLING_CYCLE_DAYS - 1)
 
     def _cycle_months(self, start: date, end: date) -> set[tuple[int, int]]:
+        """Calendar months the [`start`, `end`] range touches, clamped to not
+        go past today - a future month has no AEMO archive CSV published yet
+        (404s), and no actual usage/price data exists for days that haven't
+        happened anyway."""
+        end = min(end, date.today())
         return {(start.year, start.month), (end.year, end.month)}
 
     def cycle_price_rows(self, start: date, end: date) -> list[tuple[str, float]]:
@@ -989,55 +1085,73 @@ class App:
         self.status = ""
         self.load_summary_prices()
 
-    def today_summary_row(self) -> dict | None:
-        """A preview row for today, built from real usage-so-far plus the
-        historical hour-of-day shape (qph.project_day_summary()) - the same
-        projection draw_usage_cost()'s whole-day Estimate column uses.
-        Without this, today simply doesn't appear in the summary table
-        until it's manually saved (month_summary_rows() only reads saved
-        history), which is the common case since a day in progress isn't
-        "done" yet. Returns None outside the currently viewed billing cycle
-        (nowhere else it would belong), if today already has a saved "day"
-        entry (which already gets its own real row - this is only a
-        stand-in for one that doesn't exist yet), or if
-        qph.project_day_summary() can't project (no price data yet, or not
-        enough historical days)."""
-        today = date.today()
-        if not (self.summary_cycle_start <= today <= self.summary_cycle_end()):
+    def preview_row(self, day: date) -> dict | None:
+        """A preview row for `day` (today, or any past day this billing
+        cycle that was never manually saved - e.g. one where actual usage
+        data has since arrived but nobody visited it in day view to press
+        's'), built from real usage-so-far plus the historical hour-of-day
+        shape (qph.project_day_summary()) - the same projection
+        draw_usage_cost()'s whole-day Estimate column uses. For a past day
+        fully covered by imported actual data this ends up all-real (no
+        projection needed), same as a manual save would have produced.
+        Without this, such a day simply doesn't appear in the summary table
+        (month_summary_rows() only reads saved history). Returns None if
+        `day` already has a saved "day" entry (which already gets its own
+        real row - this is only a stand-in for one that doesn't exist yet),
+        or if qph.project_day_summary() can't project (no price data yet,
+        or not enough historical days)."""
+        if self.history.get(self.region, {}).get(day.isoformat(), {}).get("day", {}):
             return None
-        if self.history.get(self.region, {}).get(today.isoformat(), {}).get("day", {}):
-            return None
-        key = (self.region, today.year, today.month)
+        key = (self.region, day.year, day.month)
         archive_rows = self.cache.get(key, [])
         have = {t for t, _ in archive_rows}
-        all_rows = archive_rows + [(t, p) for t, p in self._live_rows(today) if t not in have]
-        day_rows = qph.day_prices(all_rows, today)
+        all_rows = archive_rows + [(t, p) for t, p in self._live_rows(day) if t not in have]
+        day_rows = qph.day_prices(all_rows, day)
         stamps = [ts for ts, _ in day_rows]
         result = qph.project_day_summary(stamps, dict(day_rows), self.actual_data, PLAN, CAP)
         if result is None:
             return None
+        day_weather = qw.weather_for_day(day) or {}
         return {
-            "date": today,
+            "date": day,
             "usage": result["usage"],
             "cost": result["cost"],
             "price_avg": result["price_avg"],
             "interval_over_cap": None,
             "estimated": True,
+            "day_multiplier": result["day_multiplier"],
+            "temp": day_weather.get("temp"),
+            "cloud": day_weather.get("cloud"),
+            "radiation": day_weather.get("radiation"),
         }
 
     def summary_rows(self) -> list[dict]:
-        """month_summary_rows() (every saved day) plus today_summary_row()
-        (a preview of today, when it isn't saved yet), merged back into
-        date order - shared by draw_summary() and export_summary() so the
-        screen and the markdown export can't drift apart."""
+        """month_summary_rows() (every saved day) plus preview_row() for
+        every day up to today that isn't saved yet - most often just today
+        in progress, but also covers a past day whose actual data arrived
+        without anyone visiting it in day view to save it - merged back
+        into date order. Shared by draw_summary() and export_summary() so
+        the screen and the markdown export can't drift apart."""
         start, end = self.summary_cycle_start, self.summary_cycle_end()
         interval_prices = interval_prices_from_rows(self.cycle_price_rows(start, end))
         interval_stats = day_interval_stats(self.actual_data, start, end, interval_prices)
         price_avgs = day_price_avgs(interval_prices, start, end)
-        rows = month_summary_rows(self.history, self.region, start, end, interval_stats, price_avgs)
-        today_row = self.today_summary_row()
-        if today_row is not None:
-            rows = sorted(rows + [today_row], key=lambda r: r["date"])
+        # Archive coverage stops at yesterday - clamp the range so a future
+        # cycle-end (or one that's still in progress) doesn't send the
+        # archive API a start > end range or a day it can't have yet.
+        weather_end = min(end, date.today() - timedelta(days=1))
+        weather = qw.historical_daily_weather(start, weather_end) if start <= weather_end else {}
+        rows = month_summary_rows(self.history, self.region, start, end, interval_stats, price_avgs, weather)
+        saved = {r["date"] for r in rows}
+        preview_end = min(end, date.today())
+        if start <= preview_end:
+            for d in date_range(start, preview_end):
+                if d in saved:
+                    continue
+                preview = self.preview_row(d)
+                if preview is not None:
+                    rows.append(preview)
+            rows.sort(key=lambda r: r["date"])
         return rows
 
     def export_summary(self) -> None:
@@ -1408,7 +1522,9 @@ class App:
             # estimates.
             e_hist_days = self.hist_days
             if e_hist_days >= qph.MIN_HISTORY_DAYS_FOR_PROJECTION:
-                projected, e_projected = qph.project_interval_usage(stamps, self.actual_data, self.hourly_profile)
+                projected, e_projected = qph.project_interval_usage(
+                    stamps, self.actual_data, self.hourly_profile, self.weather_multiplier or 1.0
+                )
                 e_usage_basis = sum(projected)
                 _e_total, e_fixed, e_energy, _capped = qph.estimate_cost_weighted(values, projected, PLAN, CAP, hours)
                 e_energy_by_period = qph.wholesale_usage_charge_by_period(stamps, values, projected, PLAN, CAP, hours)
@@ -1513,10 +1629,14 @@ class App:
             )
             y += 1
         if e_weighted and e_projected:
+            weather_note = ""
+            if self.weather_multiplier is not None and abs(self.weather_multiplier - 1.0) >= 0.01:
+                direction = "up" if self.weather_multiplier > 1.0 else "down"
+                weather_note = f", weather-adjusted {direction} {abs(self.weather_multiplier - 1.0) * 100:.0f}%"
             self.safe_addstr(
                 y, 0,
                 f"  ^ = {e_projected}/{len(stamps)} intervals have no actual data yet - projected from "
-                f"{e_hist_days} day(s) of historical usage at that hour",
+                f"{e_hist_days} day(s) of historical usage at that hour{weather_note}",
                 curses.A_DIM,
             )
             y += 1
@@ -1559,14 +1679,17 @@ class App:
             self.safe_addstr(y, 0, self.summary_fetch_error, curses.color_pair(2))
             y += 1
 
-        col = "{:<12}{:>13}{:>18}{:>10}{:>13}"
-        rule = "-" * min(w - 1, 68)
+        col = "{:<12}{:>9}{:>10}{:>14}{:>13}{:>18}{:>10}{:>13}"
+        rule = "-" * min(w - 1, 99)
         if not rows:
             self.safe_addstr(y, 0, "No saved days in this billing cycle.", curses.A_DIM)
         else:
             self.safe_addstr(
                 y, 0,
-                col.format("Date", "Usage (kWh)", "Avg price ($/kWh)", "Cost ($)", "Rate ($/kWh)"),
+                col.format(
+                    "Date", "Temp (C)", "Cloud (%)", "Solar (MJ/m2)", "Usage (kWh)",
+                    "Avg price ($/kWh)", "Cost ($)", "Rate ($/kWh)",
+                ),
                 curses.A_BOLD,
             )
             y += 1
@@ -1579,7 +1702,13 @@ class App:
             for r in shown:
                 usage, cost = r["usage"], r["cost"]
                 price_avg_val = r.get("price_avg")
+                temp_val = r.get("temp")
+                cloud_val = r.get("cloud")
+                radiation_val = r.get("radiation")
                 mark = "^" if r.get("estimated") else ""
+                temp_s = f"{temp_val:.1f}" if temp_val is not None else "-"
+                cloud_s = f"{cloud_val:.0f}" if cloud_val is not None else "-"
+                radiation_s = f"{radiation_val:.1f}" if radiation_val is not None else "-"
                 usage_s = f"{usage:.3f}{mark}" if usage is not None else "-"
                 price_avg_s = f"{price_avg_val:.4f}" if price_avg_val is not None else "-"
                 cost_s = f"{cost:.2f}{mark}" if cost is not None else "-"
@@ -1588,7 +1717,10 @@ class App:
                 attr = curses.color_pair(3) | curses.A_BOLD if is_switch else 0
                 self.safe_addstr(
                     y, 0,
-                    col.format(r["date"].strftime("%a %d %b"), usage_s, price_avg_s, cost_s, rate_s),
+                    col.format(
+                        r["date"].strftime("%a %d %b"), temp_s, cloud_s, radiation_s,
+                        usage_s, price_avg_s, cost_s, rate_s,
+                    ),
                     attr,
                 )
                 y += 1
@@ -1596,8 +1728,17 @@ class App:
                 self.safe_addstr(y, 0, f"... and {len(rows) - len(shown)} more day(s) not shown (export to see all)", curses.A_DIM)
                 y += 1
             if any_estimated:
+                estimated_rows = [r for r in rows if r.get("estimated")]
+                weather_note = ""
+                if len(estimated_rows) == 1:
+                    mult = estimated_rows[0].get("day_multiplier")
+                    if mult is not None and abs(mult - 1.0) >= 0.01:
+                        direction = "up" if mult > 1.0 else "down"
+                        weather_note = f", weather-adjusted {direction} {abs(mult - 1.0) * 100:.0f}%"
                 self.safe_addstr(
-                    y, 0, "  ^ = today, projected from historical hour-of-day usage (not yet saved)", curses.A_DIM
+                    y, 0,
+                    f"  ^ = projected from historical hour-of-day usage (not yet saved){weather_note}",
+                    curses.A_DIM,
                 )
                 y += 1
             total_usage = sum(r["usage"] for r in rows if r["usage"] is not None)
@@ -1605,17 +1746,26 @@ class App:
             any_usage = any(r["usage"] is not None for r in rows)
             any_cost = any(r["cost"] is not None for r in rows)
             price_avgs = [r["price_avg"] for r in rows if r.get("price_avg") is not None]
+            temps = [r["temp"] for r in rows if r.get("temp") is not None]
+            clouds = [r["cloud"] for r in rows if r.get("cloud") is not None]
+            radiations = [r["radiation"] for r in rows if r.get("radiation") is not None]
             total_mark = "^" if any_estimated else ""
             total_usage_s = f"{total_usage:.3f}{total_mark}" if any_usage else "-"
             total_cost_s = f"{total_cost:.2f}{total_mark}" if any_cost else "-"
             total_rate_s = f"{total_cost / total_usage:.4f}" if any_usage and any_cost and total_usage else "-"
             month_price_avg_s = f"{sum(price_avgs) / len(price_avgs):.4f}" if price_avgs else "-"
+            month_temp_s = f"{sum(temps) / len(temps):.1f}" if temps else "-"
+            month_cloud_s = f"{sum(clouds) / len(clouds):.0f}" if clouds else "-"
+            month_radiation_s = f"{sum(radiations) / len(radiations):.1f}" if radiations else "-"
             over_cap_days = [r for r in rows if r.get("interval_over_cap")]
             self.safe_addstr(y, 0, rule)
             y += 1
             self.safe_addstr(
                 y, 0,
-                col.format("Total", total_usage_s, month_price_avg_s, total_cost_s, total_rate_s),
+                col.format(
+                    "Total", month_temp_s, month_cloud_s, month_radiation_s,
+                    total_usage_s, month_price_avg_s, total_cost_s, total_rate_s,
+                ),
                 curses.A_BOLD,
             )
             y += 2
@@ -1705,6 +1855,30 @@ class App:
             self.safe_addstr(1, 0, "○ unsaved changes (s to save)", curses.color_pair(3))
         elif saved:
             self.safe_addstr(1, 0, "● saved", curses.color_pair(4))
+
+        # Placed near the top (row 2, always on-screen) rather than down by
+        # the "^" footnote under the Actual/Estimate table's Total row -
+        # that table sits below the full 24-row hourly breakdown and day
+        # chart, which scrolls off a normal-height terminal before you'd
+        # ever see it there.
+        weather_parts = []
+        day_temp = self.day_weather.get("temp") if self.day_weather else None
+        if self.weather_multiplier is not None and abs(self.weather_multiplier - 1.0) >= 0.01:
+            direction = "up" if self.weather_multiplier > 1.0 else "down"
+            temp_s = f"{day_temp:.1f}°C" if day_temp is not None else "?"
+            weather_parts.append(
+                f"{temp_s} -> your usage projection adjusted {direction} "
+                f"{abs(self.weather_multiplier - 1.0) * 100:.0f}%"
+            )
+        if self.day_weather:
+            cloud, radiation = self.day_weather.get("cloud"), self.day_weather.get("radiation")
+            if cloud is not None or radiation is not None:
+                cloud_s = f"{cloud:.0f}% cloud" if cloud is not None else ""
+                radiation_s = f"{radiation:.1f} MJ/m² solar" if radiation is not None else ""
+                sky = ", ".join(s for s in (cloud_s, radiation_s) if s)
+                weather_parts.append(f"Sky: {sky} (state demand/price context, not your usage)")
+        if weather_parts:
+            self.safe_addstr(2, 0, "Weather: " + "   |   ".join(weather_parts), curses.A_DIM)
 
         y = 3
         if self.actual_fetch_error:

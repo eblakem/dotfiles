@@ -1,0 +1,108 @@
+html {
+	color: #24292f;
+	background-color: #ffffff;
+}
+body {
+	margin: 0 auto;
+	max-width: 46em;
+	padding: 3em 2em;
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+	font-size: 17px;
+	line-height: 1.6;
+}
+h1, h2, h3, h4, h5, h6 {
+	font-weight: 600;
+	line-height: 1.25;
+	margin-top: 1.6em;
+	margin-bottom: 0.6em;
+}
+h1 { font-size: 2em; border-bottom: 1px solid #d0d7de; padding-bottom: 0.3em; }
+h2 { font-size: 1.5em; border-bottom: 1px solid #d0d7de; padding-bottom: 0.3em; }
+h3 { font-size: 1.25em; }
+header#title-block-header { text-align: left; margin-bottom: 1em; border-bottom: none; }
+header#title-block-header h1 { border-bottom: none; }
+p, ul, ol, blockquote, table, pre {
+	margin: 0.8em 0;
+}
+a { color: #0969da; text-decoration: none; }
+a:hover { text-decoration: underline; }
+code {
+	font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+	font-size: 0.875em;
+	background-color: rgba(175, 184, 193, 0.2);
+	padding: 0.2em 0.4em;
+	border-radius: 6px;
+}
+pre {
+	background-color: #f6f8fa;
+	border-radius: 6px;
+	padding: 1em;
+	overflow-x: auto;
+}
+pre code {
+	background-color: transparent;
+	padding: 0;
+	font-size: 0.85em;
+	white-space: pre;
+}
+blockquote {
+	margin-left: 0;
+	padding-left: 1em;
+	border-left: 0.25em solid #d0d7de;
+	color: #57606a;
+}
+table {
+	border-collapse: collapse;
+	width: 100%;
+	display: table;
+}
+th, td {
+	border: 1px solid #d0d7de;
+	padding: 0.4em 0.8em;
+	text-align: left;
+}
+th { background-color: #f6f8fa; }
+tbody tr:nth-child(2n) { background-color: #f6f8fa; }
+img { max-width: 100%; }
+hr { border: none; border-top: 1px solid #d0d7de; margin: 2em 0; }
+
+@media (prefers-color-scheme: dark) {
+	html:not([data-theme="light"]) { color: #e6edf3; background-color: #0d1117; }
+	html:not([data-theme="light"]) h1, html:not([data-theme="light"]) h2 { border-bottom-color: #30363d; }
+	html:not([data-theme="light"]) a { color: #4493f8; }
+	html:not([data-theme="light"]) code { background-color: rgba(110, 118, 129, 0.4); }
+	html:not([data-theme="light"]) pre { background-color: #161b22; }
+	html:not([data-theme="light"]) blockquote { border-left-color: #30363d; color: #8b949e; }
+	html:not([data-theme="light"]) th, html:not([data-theme="light"]) td { border-color: #30363d; }
+	html:not([data-theme="light"]) th, html:not([data-theme="light"]) tbody tr:nth-child(2n) { background-color: #161b22; }
+	html:not([data-theme="light"]) hr { border-top-color: #30363d; }
+}
+
+/* Explicit override for renderers (e.g. headless Chromium print-to-pdf) that
+   don't reliably honor prefers-color-scheme emulation. */
+html[data-theme="dark"] { color: #e6edf3; background-color: #0d1117; }
+html[data-theme="dark"] h1, html[data-theme="dark"] h2 { border-bottom-color: #30363d; }
+html[data-theme="dark"] a { color: #4493f8; }
+html[data-theme="dark"] code { background-color: rgba(110, 118, 129, 0.4); }
+html[data-theme="dark"] pre { background-color: #161b22; }
+html[data-theme="dark"] blockquote { border-left-color: #30363d; color: #8b949e; }
+html[data-theme="dark"] th, html[data-theme="dark"] td { border-color: #30363d; }
+html[data-theme="dark"] th, html[data-theme="dark"] tbody tr:nth-child(2n) { background-color: #161b22; }
+html[data-theme="dark"] hr { border-top-color: #30363d; }
+
+/* Chrome's print pipeline never paints the @page margin box, so a nonzero
+   @page margin always shows through as a plain white gutter regardless of
+   html/body background. Zero it out and simulate the margin with body
+   padding instead, which IS part of the colored content area. */
+@page {
+	margin: 0;
+}
+
+@media print {
+	* {
+		-webkit-print-color-adjust: exact;
+		print-color-adjust: exact;
+	}
+	body { max-width: none; padding: 1.5cm; font-size: 12pt; box-sizing: border-box; min-height: 100vh; }
+	a { text-decoration: underline; }
+}

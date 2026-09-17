@@ -3,6 +3,7 @@ dot-config/QtProject.conf
 dot-config/create-next-app-nodejs/
 dot-config/nextjs-nodejs/
 dot-config/qBittorrent/
+dot-config/google-chrome/
 dot-config/vlc/
 dot-config/pavucontrol.ini
 **/__pycache__/

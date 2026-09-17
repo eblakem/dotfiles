@@ -1,0 +1,16 @@
+[Unit]
+Description=Odin dev pod (Postgres, Elasticsearch, Snowstorm, dev toolchain)
+After=network-online.target
+Before=heimdall.service vigil.service mimir.service vigil-demo.service caddy.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Mirrors dev/up.sh's own logic (start if it already exists) — the pod is
+# created once via `podman kube play` from dev/pod.kube.yaml; this unit only
+# ever starts the existing pod at boot, never recreates it.
+ExecStart=/usr/bin/podman pod start odin
+ExecStop=/usr/bin/podman pod stop odin
+
+[Install]
+WantedBy=default.target

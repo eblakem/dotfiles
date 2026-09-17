@@ -1,0 +1,17 @@
+[Unit]
+Description=Heimdall (local, via Netbird)
+After=network-online.target
+
+[Container]
+Image=localhost/odin-heimdall:local
+Network=host
+Environment=HOST=127.0.0.1
+Environment=PORT=5173
+EnvironmentFile=%h/.config/containers/systemd/heimdall.env
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

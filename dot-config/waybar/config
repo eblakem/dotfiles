@@ -2,7 +2,7 @@
   "layer": "top", "position": "bottom",
   "modules-left": ["custom/logo", "niri/workspaces", "clock", "custom/qld_price"  ],
   "modules-center": [ "custom/weather" ],
-  "modules-right": [ "backlight", "idle_inhibitor", "cpu", "memory", "disk",  "bluetooth", "wireplumber", "network",  "battery", "custom/power_profile" ],
+  "modules-right": [ "backlight", "idle_inhibitor", "cpu", "memory", "disk",  "bluetooth", "wireplumber", "network", "custom/protonvpn",  "battery", "custom/power_profile" ],
   "reload_style_on_change":true,
 
   "custom/logo": {
@@ -31,11 +31,11 @@
   "return-type": "json",
   "exec": "~/.config/waybar/scripts/weather.sh",
   "interval": 10,
-  "on-click": "firefox https://wttr.in"
+  "on-click": "chromium http://www.bom.gov.au/qld/forecasts/brisbane.shtml"
 },
 
 "clock": {
-        	"format": "{:%H:%M:%S}",
+        	"format": "{:%H:%M:%S  %d·%m·%y}",
 		"interval": 1,
         	"rotate": 0,
         	"format-alt": "{  %d·%m·%y}",
@@ -74,6 +74,17 @@
       "tooltip-format-ethernet": "{ifname} 🖧 | {ipaddr}",
       "on-click": "nm-connection-editor"
     },
+
+"custom/protonvpn": {
+    "format": "{}",
+    "return-type": "json",
+    "exec": "~/.config/waybar/scripts/protonvpn.sh",
+    "interval": 5,
+    "signal": 8,
+    "on-click": "~/.config/waybar/scripts/protonvpn.sh toggle && pkill -RTMIN+8 waybar",
+    "on-click-right": "protonvpn-app",
+    "tooltip": true
+},
 
 "custom/power_profile": {
     "exec": "profile=$(tlpctl get); if [ \"$profile\" = \"performance\" ]; then echo '{\"text\":\"\",\"class\":\"performance\"}'; elif [ \"$profile\" = \"balanced\" ]; then echo '{\"text\":\"󰠠\",\"class\":\"balanced\"}'; else echo '{\"text\":\"🌱\",\"class\":\"power-saver\"}'; fi",
@@ -169,7 +180,7 @@
     "return-type": "json",
     "exec": "~/.config/waybar/scripts/qld_price.py",
     "interval": 60,
-    "on-click": "firefox https://www.aemo.com.au/energy-systems/electricity/national-electricity-market-nem/data-nem/data-dashboard-nem",
+    "on-click": "chromium https://www.aemo.com.au/energy-systems/electricity/national-electricity-market-nem/data-nem/data-dashboard-nem",
     "on-click-right": "foot -T 'QLD Price' -W 110x45 ~/.config/waybar/scripts/qld_price_tui.py"
   }
 

@@ -1,0 +1,17 @@
+[Unit]
+Description=Caddy (local TLS for odin apps, via Netbird)
+After=network-online.target heimdall.service vigil.service mimir.service
+
+[Container]
+Image=docker.io/library/caddy:2
+Network=host
+Volume=%h/.config/containers/systemd/caddy/Caddyfile:/etc/caddy/Caddyfile:ro,Z
+Volume=odin_caddy_data:/data
+Volume=odin_caddy_config:/config
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

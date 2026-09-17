@@ -2,4 +2,4 @@
 # VERSION: 3.0
 SETUVAR __fish_initialized:4300
 SETUVAR _fisher_upgraded_to_4_4:\x1d
-SETUVAR fish_user_paths:/home/michael/\x2elocal/bin
+SETUVAR fish_user_paths:/home/michael/\x2elocal/share/mise/installs/node/26\x2e0\x2e0/bin\x1e/home/michael/\x2elocal/bin

@@ -1,0 +1,17 @@
+[Unit]
+Description=Vigil (local, via Netbird)
+After=network-online.target
+
+[Container]
+Image=localhost/odin-vigil:local
+Network=host
+Environment=HOST=127.0.0.1
+Environment=PORT=5174
+EnvironmentFile=%h/.config/containers/systemd/vigil.env
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

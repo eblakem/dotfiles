@@ -17,6 +17,7 @@ require("which-key").setup({ -- Useful plugin to show you pending keybinds.
 			{ "<leader>s", group = "[S]earch", mode = { "n", "v" } },
 			{ "<leader>t", group = "[T]oggle" },
 			{ "<leader>h", group = "Git [H]unk", mode = { "n", "v" } }, -- Enable gitsigns recommended keymaps first
+			{ "<leader>m", group = "[M]arkdown export" },
 			{ "gr", group = "LSP Actions", mode = { "n" } },
 		},
 	},

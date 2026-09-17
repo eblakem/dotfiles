@@ -33,6 +33,7 @@ window#waybar {
 #custom-clipboard,
 #custom-colorpicker,
 #custom-powerDraw,
+#custom-protonvpn,
 #bluetooth,
 #wireplumber,
 #network,
@@ -144,6 +145,18 @@ window#waybar {
 #custom-power_profile.power-saver {
     color: #50fa7b;
     font-size: 12px;
+}
+
+#custom-protonvpn {
+    margin-right: 5px;
+}
+
+#custom-protonvpn.connected {
+    color: #50fa7b;
+}
+
+#custom-protonvpn.disconnected {
+    color: #6c7086;
 }
 
 #custom-qld_price {

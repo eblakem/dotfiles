@@ -28,6 +28,7 @@ local ts_ft = {
 	"kotlin",
 	"lua",
 	"markdown",
+	"markdown_inline",
 	"python",
 	"rasi",
 	"scss",

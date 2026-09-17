@@ -9,3 +9,6 @@ source ~/.profile
 
 # Added by Antigravity CLI installer
 set -gx PATH "/home/michael/.local/bin" $PATH
+
+# Pi
+fish_add_path "/home/michael/.local/share/mise/installs/node/26.0.0/bin"

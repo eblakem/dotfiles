@@ -70,7 +70,7 @@ hr { border: none; border-top: 1px solid #d0d7de; margin: 2em 0; }
 	html:not([data-theme="light"]) { color: #e6edf3; background-color: #0d1117; }
 	html:not([data-theme="light"]) h1, html:not([data-theme="light"]) h2 { border-bottom-color: #30363d; }
 	html:not([data-theme="light"]) a { color: #4493f8; }
-	html:not([data-theme="light"]) code { background-color: rgba(110, 118, 129, 0.4); }
+	html:not([data-theme="light"]) :not(pre) > code { background-color: rgba(110, 118, 129, 0.4); }
 	html:not([data-theme="light"]) pre { background-color: #161b22; }
 	html:not([data-theme="light"]) blockquote { border-left-color: #30363d; color: #8b949e; }
 	html:not([data-theme="light"]) th, html:not([data-theme="light"]) td { border-color: #30363d; }
@@ -83,7 +83,7 @@ hr { border: none; border-top: 1px solid #d0d7de; margin: 2em 0; }
 html[data-theme="dark"] { color: #e6edf3; background-color: #0d1117; }
 html[data-theme="dark"] h1, html[data-theme="dark"] h2 { border-bottom-color: #30363d; }
 html[data-theme="dark"] a { color: #4493f8; }
-html[data-theme="dark"] code { background-color: rgba(110, 118, 129, 0.4); }
+html[data-theme="dark"] :not(pre) > code { background-color: rgba(110, 118, 129, 0.4); }
 html[data-theme="dark"] pre { background-color: #161b22; }
 html[data-theme="dark"] blockquote { border-left-color: #30363d; color: #8b949e; }
 html[data-theme="dark"] th, html[data-theme="dark"] td { border-color: #30363d; }

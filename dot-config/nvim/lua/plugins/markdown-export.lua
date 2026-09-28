@@ -39,9 +39,17 @@ local function export(kind)
 		vim.notify("pandoc not found (try: sudo pacman -S pandoc-cli)", vim.log.levels.ERROR)
 		return
 	end
+	if vim.fn.executable("mermaid-filter") == 0 then
+		vim.notify("mermaid-filter not found (try: npm install -g mermaid-filter)", vim.log.levels.ERROR)
+		return
+	end
 
 	local html = vim.fn.fnamemodify(src, ":r") .. ".html"
 	local css = vim.fs.joinpath(vim.fn.stdpath("config"), "markdown-export.css")
+	local link_filter = vim.fs.joinpath(vim.fn.stdpath("config"), "markdown-export-links.lua")
+	-- Root for "/foo.md"-style links: the enclosing git repo, else the file's dir.
+	local outdir = vim.fn.fnamemodify(src, ":p:h")
+	local link_root = vim.fs.root(src, ".git") or outdir
 
 	local function pandoc_to_html(on_done)
 		vim.system(
@@ -51,13 +59,24 @@ local function export(kind)
 				"--embed-resources",
 				"--css",
 				css,
+				"--filter",
+				"mermaid-filter",
+				"--lua-filter",
+				link_filter,
+				"--metadata",
+				"link-root=" .. link_root,
+				"--metadata",
+				"link-outdir=" .. outdir,
 				"--metadata",
 				"pagetitle=" .. vim.fn.fnamemodify(src, ":t:r"),
 				"-o",
 				html,
 				src,
 			},
-			{ text = true },
+			{
+				text = true,
+				env = { PUPPETEER_EXECUTABLE_PATH = "/usr/bin/chromium" },
+			},
 			vim.schedule_wrap(function(res)
 				if res.code ~= 0 then
 					vim.notify("pandoc failed: " .. res.stderr, vim.log.levels.ERROR)

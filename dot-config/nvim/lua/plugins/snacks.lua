@@ -5,6 +5,7 @@ vim.pack.add({
 require("snacks").setup({
 	expolorer = { enabled = true },
 	picker = {},
+	image = { enabled = true },
 	notifier = {
 		top_down = false,
 		margin = { bottom = 2 },

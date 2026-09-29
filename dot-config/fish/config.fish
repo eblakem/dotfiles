@@ -12,3 +12,6 @@ set -gx PATH "/home/michael/.local/bin" $PATH
 
 # Pi
 fish_add_path "/home/michael/.local/share/mise/installs/node/26.0.0/bin"
+
+# mermaid-cli / mermaid-filter: use system chromium instead of downloading one
+set -gx PUPPETEER_EXECUTABLE_PATH /usr/bin/chromium

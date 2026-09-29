@@ -234,6 +234,7 @@ spawn-at-startup "dbus-update-activation-environment" "--all"
 spawn-at-startup "systemctl" "--user" "import-environment" "WAYLAND_DISPLAY" "XDG_CURRENT_DESKTOP" "XDG_SESSION_ID" "XDG_SEAT" "XDG_VTNR"
 spawn-at-startup "systemctl" "--user" "restart" "gnome-keyring-daemon.service"
 spawn-at-startup "/usr/lib/xdg-desktop-portal" "-r"
+spawn-at-startup "~/.config/niri/scripts/fix-audio-defaults.sh"
 
 // Uncomment this line to ask the clients to omit their client-side decorations if possible.
 // If the client will specifically ask for CSD, the request will be honored.
@@ -336,7 +337,7 @@ binds {
     Mod+Shift+Slash { show-hotkey-overlay; }
 
     // Suggested binds for running programs: terminal, app launcher, screen locker.
-    Mod+T { spawn "foot"; }
+    Mod+T { spawn "kitty"; }
     Mod+D { spawn "fuzzel"; }
 
     Mod+W { spawn "chromium"; }
